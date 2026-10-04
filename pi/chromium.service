@@ -1,0 +1,27 @@
+[Unit]
+Description=Littlefoot Racing — Chromium Kiosk
+After=cockpit.service graphical.target
+Wants=cockpit.service
+
+[Service]
+Type=simple
+User=pi
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+ExecStartPre=/bin/sleep 8
+ExecStart=/usr/bin/chromium-browser \
+  --kiosk \
+  --noerrdialogs \
+  --disable-infobars \
+  --no-first-run \
+  --disable-session-crashed-bubble \
+  --disable-restore-session-state \
+  --check-for-update-interval=604800 \
+  http://localhost:8080/cockpit.html
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

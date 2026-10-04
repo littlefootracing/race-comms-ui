@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Littlefoot — Cockpit</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #111111;
+    font-family: 'Arial Black', 'Arial Narrow', Arial, sans-serif;
+    color: white;
+    user-select: none;
+  }
+
+  #screen {
+    width: 100vw; height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    position: relative;
+    transition: background-color 0.2s;
+  }
+
+  #main-text {
+    font-size: 160px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -2px;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  #sub-text {
+    font-size: 28px;
+    font-weight: 400;
+    opacity: 0.6;
+    margin-top: 12px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+
+  /* Standby state overrides */
+  #screen.state-STANDBY #main-text {
+    font-size: 60px;
+    font-weight: 700;
+    opacity: 0.5;
+    letter-spacing: 6px;
+  }
+  #screen.state-STANDBY #team-name {
+    display: block;
+  }
+
+  /* Idle mode — big race timer, everything else hidden */
+  #screen.idle #main-text,
+  #screen.idle #sub-text,
+  #screen.idle #team-name,
+  #screen.idle #ws-status,
+  #screen.idle #drive-timer { display: none; }
+
+  #idle-display {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%; height: 100%;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #screen.idle #idle-display { display: flex; }
+
+  #idle-drive-time {
+    font-size: 140px;
+    font-weight: 900;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 4px;
+    line-height: 1;
+    opacity: 0.85;
+    transition: opacity 0.1s;
+  }
+  #idle-clock {
+    font-size: 28px;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 4px;
+    opacity: 0.3;
+  }
+  #idle-label {
+    font-size: 11px;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 4px;
+    opacity: 0.2;
+    text-transform: uppercase;
+  }
+  #idle-reset-hint {
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    opacity: 0;
+    transition: opacity 0.15s;
+    margin-top: 8px;
+  }
+  #idle-display.confirming #idle-reset-hint { opacity: 0.5; }
+  #idle-display.confirming #idle-drive-time { opacity: 0.4; }
+
+  /* Reset progress bar */
+  #reset-bar-wrap {
+    width: 300px; height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  #idle-display.confirming #reset-bar-wrap { opacity: 1; }
+  #reset-bar {
+    height: 100%;
+    width: 0%;
+    background: rgba(255,255,255,0.6);
+    border-radius: 2px;
+    transition: width linear;
+  }
+
+  #team-name {
+    display: none;
+    font-size: 22px;
+    font-weight: 400;
+    opacity: 0.3;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  #clock {
+    position: absolute;
+    bottom: 14px; right: 20px;
+    font-size: 22px;
+    font-weight: 400;
+    opacity: 0.4;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 2px;
+  }
+
+  #drive-timer {
+    position: absolute;
+    bottom: 10px; left: 20px;
+    display: flex; flex-direction: column; align-items: flex-start;
+    gap: 2px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #drive-timer-label {
+    font-size: 10px;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 2px;
+    opacity: 0.35;
+    text-transform: uppercase;
+  }
+  #drive-timer-value {
+    font-size: 32px;
+    font-weight: 900;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 2px;
+    opacity: 0.75;
+    line-height: 1;
+  }
+  #drive-timer-reset {
+    font-size: 9px;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+    opacity: 0;
+    text-transform: uppercase;
+    transition: opacity 0.2s;
+  }
+  #drive-timer:active #drive-timer-reset,
+  #drive-timer.confirming #drive-timer-reset {
+    opacity: 0.5;
+  }
+
+  /* dark text applies to timer too */
+  #screen.dark-text #drive-timer-label,
+  #screen.dark-text #drive-timer-value,
+  #screen.dark-text #drive-timer-reset { color: #111111; }
+
+  #ws-status {
+    position: absolute;
+    top: 10px; left: 14px;
+    font-size: 11px;
+    opacity: 0.25;
+    font-family: monospace;
+    letter-spacing: 1px;
+  }
+
+  /* Flash animation — overlays the screen with white then fades */
+  #flash {
+    position: absolute;
+    inset: 0;
+    background: white;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* Border pulse for PIT_NOW */
+  @keyframes borderPulse {
+    0%   { box-shadow: inset 0 0 0 0px rgba(255,255,255,0); }
+    50%  { box-shadow: inset 0 0 0 18px rgba(255,255,255,0.7); }
+    100% { box-shadow: inset 0 0 0 0px rgba(255,255,255,0); }
+  }
+  #screen.urgent { animation: borderPulse 0.8s ease-in-out infinite; }
+
+  /* Caution — dark text */
+  #screen.dark-text #main-text,
+  #screen.dark-text #sub-text,
+  #screen.dark-text #clock,
+  #screen.dark-text #ws-status,
+  #screen.dark-text #team-name { color: #111111; }
+</style>
+</head>
+<body>
+
+<div id="screen" class="state-STANDBY">
+  <div id="flash"></div>
+  <span id="team-name">Littlefoot Racing</span>
+  <div id="main-text">STANDING BY</div>
+  <div id="sub-text"></div>
+  <div id="idle-display">
+    <div id="idle-label">Drive time</div>
+    <div id="idle-drive-time">0:00:00</div>
+    <div id="idle-clock"></div>
+    <div id="reset-bar-wrap"><div id="reset-bar"></div></div>
+    <div id="idle-reset-hint">hold to reset timer</div>
+  </div>
+
+  <div id="clock"></div>
+  <div id="drive-timer" title="Tap to reset">
+    <div id="drive-timer-label">Drive time</div>
+    <div id="drive-timer-value">0:00:00</div>
+    <div id="drive-timer-reset">hold to reset</div>
+  </div>
+  <div id="ws-status">connecting…</div>
+</div>
+
+<script>
+const LOCAL_WS = 'ws://localhost:8765';
+
+const STATES = {
+  STANDBY:  { bg: '#111111', main: 'STANDING BY', sub: '',                        flash: 0, dark: false, urgent: false },
+  BOX_NOW:  { bg: '#C0392B', main: 'BOX NOW',      sub: 'Come in this lap',        flash: 3, dark: false, urgent: false },
+  BOX_NEXT: { bg: '#E67E22', main: 'BOX +1',        sub: 'Box next lap',           flash: 3, dark: false, urgent: false },
+  FUEL:     { bg: '#D35400', main: 'FUEL',           sub: 'Fuel concern — monitor', flash: 3, dark: false, urgent: false },
+  STAY_OUT: { bg: '#27AE60', main: 'STAY OUT',       sub: 'Keep pushing',           flash: 2, dark: false, urgent: false },
+  ACK:      { bg: '#2980B9', main: 'GOT IT',         sub: 'Pit received your message', flash: 1, dark: false, urgent: false },
+  CAUTION:  { bg: '#F1C40F', main: 'CAUTION',        sub: 'Slow down — hazard',     flash: 3, dark: true,  urgent: false },
+  PIT_NOW:  { bg: '#8E44AD', main: 'PIT NOW',        sub: 'Urgent — box immediately', flash: 5, dark: false, urgent: true },
+};
+
+const screen   = document.getElementById('screen');
+const mainText = document.getElementById('main-text');
+const subText  = document.getElementById('sub-text');
+const flashEl  = document.getElementById('flash');
+const wsStatus = document.getElementById('ws-status');
+
+// Fit main text to ~70% width
+function fitText() {
+  const maxW = window.innerWidth * 0.82;
+  let size = 160;
+  mainText.style.fontSize = size + 'px';
+  while (mainText.scrollWidth > maxW && size > 40) {
+    size -= 2;
+    mainText.style.fontSize = size + 'px';
+  }
+}
+
+function setState(code) {
+  const s = STATES[code] || STATES.STANDBY;
+
+  exitIdle();
+
+  // Clear
+  screen.className = '';
+  screen.classList.add(`state-${code}`);
+  if (s.dark)   screen.classList.add('dark-text');
+  if (s.urgent) screen.classList.add('urgent');
+
+  screen.style.backgroundColor = s.bg;
+  mainText.textContent = s.main;
+  subText.textContent  = s.sub;
+  fitText();
+
+  if (s.flash > 0) doFlash(s.flash);
+}
+
+async function doFlash(count) {
+  for (let i = 0; i < count; i++) {
+    flashEl.style.transition = 'none';
+    flashEl.style.opacity = '0.85';
+    await delay(120);
+    flashEl.style.transition = 'opacity 80ms ease';
+    flashEl.style.opacity = '0';
+    await delay(160);
+  }
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+const IDLE_AFTER_MS = 30000;
+let idleTimer = null;
+
+function enterIdle() {
+  screen.classList.add('idle');
+  screen.style.backgroundColor = '#0a0a0a';
+}
+
+function exitIdle() {
+  screen.classList.remove('idle');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(enterIdle, IDLE_AFTER_MS);
+}
+
+function scheduleIdle() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(enterIdle, IDLE_AFTER_MS);
+}
+
+// Wall clock
+function updateClock() {
+  const t = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+  document.getElementById('clock').textContent = t;
+  document.getElementById('idle-clock').textContent = t;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// Drive timer
+const TIMER_KEY = 'driveTimerStart';
+let driveStart = parseInt(localStorage.getItem(TIMER_KEY) || Date.now());
+if (!localStorage.getItem(TIMER_KEY)) localStorage.setItem(TIMER_KEY, driveStart);
+
+function formatDriveTime(ms) {
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+function updateDriveTimer() {
+  const t = formatDriveTime(Date.now() - driveStart);
+  document.getElementById('drive-timer-value').textContent = t;
+  document.getElementById('idle-drive-time').textContent = t;
+}
+setInterval(updateDriveTimer, 1000);
+updateDriveTimer();
+
+// ── Hold-to-reset (shared) ────────────────────────────────────────────────
+const HOLD_MS = 1500;
+let holdTimer = null;
+
+function doReset() {
+  driveStart = Date.now();
+  localStorage.setItem(TIMER_KEY, driveStart);
+  updateDriveTimer();
+}
+
+function attachHoldReset(el, onConfirm) {
+  const bar = document.getElementById('reset-bar');
+
+  function start() {
+    el.classList.add('confirming');
+    if (bar) {
+      bar.style.transition = 'none';
+      bar.style.width = '0%';
+      requestAnimationFrame(() => {
+        bar.style.transition = `width ${HOLD_MS}ms linear`;
+        bar.style.width = '100%';
+      });
+    }
+    holdTimer = setTimeout(() => {
+      el.classList.remove('confirming');
+      if (bar) { bar.style.transition = 'none'; bar.style.width = '0%'; }
+      onConfirm();
+    }, HOLD_MS);
+  }
+
+  function cancel() {
+    clearTimeout(holdTimer);
+    el.classList.remove('confirming');
+    if (bar) { bar.style.transition = 'none'; bar.style.width = '0%'; }
+  }
+
+  el.addEventListener('pointerdown', start);
+  el.addEventListener('pointerup',    cancel);
+  el.addEventListener('pointerleave', cancel);
+  el.addEventListener('pointercancel',cancel);
+}
+
+// Corner timer (non-idle states)
+attachHoldReset(document.getElementById('drive-timer'), () => {
+  doReset();
+  const el = document.getElementById('drive-timer');
+  el.style.opacity = '0.2';
+  setTimeout(() => el.style.opacity = '', 250);
+});
+
+// Full-screen idle display
+attachHoldReset(document.getElementById('idle-display'), () => {
+  doReset();
+  const el = document.getElementById('idle-drive-time');
+  el.style.opacity = '0.1';
+  setTimeout(() => el.style.opacity = '', 300);
+});
+
+// WebSocket to local pi_main.py server
+let ws, reconnectTimer;
+
+function connect() {
+  ws = new WebSocket(LOCAL_WS);
+
+  ws.onopen = () => {
+    wsStatus.textContent = 'connected';
+    clearTimeout(reconnectTimer);
+  };
+
+  ws.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.type === 'pit_message' && msg.code) {
+      setState(msg.code);
+    }
+  };
+
+  ws.onclose = () => {
+    wsStatus.textContent = 'reconnecting…';
+    reconnectTimer = setTimeout(connect, 2000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+// Initial state
+setState('STANDBY');
+scheduleIdle();
+
+// Preview mode — ?preview=1 adds an on-screen state picker (not used in car)
+if (new URLSearchParams(location.search).get('preview') === '1') {
+  const bar = document.createElement('div');
+  bar.style.cssText = [
+    'position:fixed','bottom:0','left:0','right:0',
+    'display:flex','gap:6px','padding:8px 10px',
+    'background:rgba(0,0,0,0.75)','z-index:999','flex-wrap:wrap',
+    'backdrop-filter:blur(4px)'
+  ].join(';');
+  Object.keys(STATES).forEach(code => {
+    const s = STATES[code];
+    const btn = document.createElement('button');
+    btn.textContent = code.replace('_', ' ');
+    btn.style.cssText = [
+      `background:${s.bg}`,
+      `color:${s.dark ? '#111' : '#fff'}`,
+      'border:none','border-radius:6px','padding:7px 12px',
+      'font-size:12px','font-weight:700','cursor:pointer',
+      'letter-spacing:0.5px','flex:1','min-width:80px'
+    ].join(';');
+    btn.onclick = () => setState(code);
+    bar.appendChild(btn);
+  });
+  document.body.appendChild(bar);
+  wsStatus.textContent = 'preview mode';
+} else {
+  connect();
+}
+</script>
+</body>
+</html>

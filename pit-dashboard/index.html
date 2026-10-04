@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Littlefoot Racing — Pit Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0d0d0d;
+    color: #f0f0f0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    background: #1a1a1a;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #333;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+  #status-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #555; display: inline-block; margin-right: 6px;
+    transition: background 0.3s;
+  }
+  #status-dot.online  { background: #27AE60; }
+  #status-dot.offline { background: #C0392B; }
+  #status-label { font-size: 13px; color: #999; }
+
+  /* ── Driver selector bar ── */
+  #driver-bar {
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #222;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  #driver-bar-label {
+    font-size: 10px;
+    color: #555;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  #driver-roster { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+  .driver-chip {
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid #333;
+    background: #1a1a1a;
+    color: #777;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .driver-chip.active { background: #E67E22; border-color: #E67E22; color: white; }
+  .driver-chip:active { opacity: 0.7; }
+  #driver-add {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 1px solid #333; background: none; color: #555;
+    font-size: 20px; cursor: pointer; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  #driver-add:active { color: #fff; border-color: #fff; }
+  #driver-none { color: #444; font-size: 12px; font-style: italic; }
+
+  /* ── Driver alert cards ── */
+  #alerts {
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .alert-card {
+    border-radius: 10px;
+    padding: 13px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    animation: slideIn 0.2s ease;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .alert-card:active { opacity: 0.7; transform: scale(0.98); }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideOut {
+    to { opacity: 0; transform: translateX(60px); max-height: 0; padding: 0; margin: 0; }
+  }
+  .alert-card.dismissing {
+    animation: slideOut 0.2s ease forwards;
+    overflow: hidden;
+  }
+  .alert-card .alert-left  { display: flex; flex-direction: column; gap: 2px; }
+  .alert-card .alert-label { font-size: 20px; font-weight: 800; letter-spacing: 1px; }
+  .alert-card .alert-time  { font-size: 11px; opacity: 0.65; }
+  .alert-card .alert-dismiss { font-size: 20px; opacity: 0.5; padding-left: 12px; }
+
+  .card-BOX_REQUEST { background: #C0392B; }
+  .card-FUEL_LOW    { background: #E67E22; }
+  .card-ALL_GOOD    { background: #27AE60; }
+  .card-ACKNOWLEDGE { background: #2980B9; }
+
+  #no-alerts { color: #444; font-size: 13px; padding: 10px 0; text-align: center; }
+
+  /* ── Send commands ── */
+  #commands {
+    padding: 10px 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .cmd-btn {
+    border: none; border-radius: 10px; padding: 16px 10px;
+    font-size: 17px; font-weight: 800; letter-spacing: 1px;
+    cursor: pointer; text-transform: uppercase;
+    color: white; transition: opacity 0.15s, transform 0.1s;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cmd-btn:active { opacity: 0.75; transform: scale(0.97); }
+  .cmd-btn .cmd-sub { font-size: 10px; font-weight: 400; opacity: 0.75; text-transform: none; }
+  .cmd-btn.sent { outline: 3px solid white; }
+
+  .btn-BOX_NOW   { background: #C0392B; }
+  .btn-BOX_NEXT  { background: #E67E22; }
+  .btn-FUEL      { background: #D35400; }
+  .btn-STAY_OUT  { background: #27AE60; }
+  .btn-ACK       { background: #2980B9; }
+  .btn-CAUTION   { background: #F1C40F; color: #111; }
+  .btn-PIT_NOW   { background: #8E44AD; }
+  .btn-STANDBY   { background: #333; }
+
+  /* ── Dual logs ── */
+  #logs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+    border-top: 1px solid #222;
+  }
+  .log-col {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .log-col:first-child { border-right: 1px solid #222; }
+  .log-col h2 {
+    font-size: 11px; color: #444; text-transform: uppercase;
+    letter-spacing: 1px; padding: 8px 12px 6px;
+    border-bottom: 1px solid #1a1a1a;
+    flex-shrink: 0;
+  }
+  .log-col h2 span { float: right; font-size: 14px; }
+  .log-scroll {
+    flex: 1;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 11px;
+  }
+  .log-entry {
+    padding: 4px 12px;
+    border-bottom: 1px solid #111;
+    line-height: 1.4;
+  }
+  .log-entry .ts   { color: #444; display: block; font-size: 10px; }
+  .log-entry .msg  { color: #bbb; }
+  .log-entry.car-to-pit .msg { color: #E67E22; }
+  .log-entry.pit-to-car .msg { color: #2980B9; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>&#127937; LITTLEFOOT PIT</h1>
+  <div>
+    <span id="status-dot" class="offline"></span>
+    <span id="status-label">Car offline</span>
+  </div>
+</header>
+
+<!-- Driver selector -->
+<div id="driver-bar">
+  <span id="driver-bar-label">Driver</span>
+  <div id="driver-roster"><span id="driver-none">No drivers — tap + to add</span></div>
+  <button id="driver-add" title="Add driver">+</button>
+</div>
+
+<!-- Driver button alerts -->
+<div id="alerts">
+  <div id="no-alerts">No driver messages yet</div>
+</div>
+
+<!-- Pit send buttons -->
+<div id="commands">
+  <button class="cmd-btn btn-BOX_NOW"  onclick="send('BOX_NOW')">BOX NOW<span class="cmd-sub">Come in this lap</span></button>
+  <button class="cmd-btn btn-BOX_NEXT" onclick="send('BOX_NEXT')">BOX +1<span class="cmd-sub">Next lap</span></button>
+  <button class="cmd-btn btn-FUEL"     onclick="send('FUEL')">FUEL<span class="cmd-sub">Fuel concern</span></button>
+  <button class="cmd-btn btn-STAY_OUT" onclick="send('STAY_OUT')">STAY OUT<span class="cmd-sub">Keep pushing</span></button>
+  <button class="cmd-btn btn-ACK"      onclick="send('ACK')">GOT IT<span class="cmd-sub">Acknowledged</span></button>
+  <button class="cmd-btn btn-CAUTION"  onclick="send('CAUTION')">CAUTION<span class="cmd-sub">Slow down</span></button>
+  <button class="cmd-btn btn-PIT_NOW"  onclick="send('PIT_NOW')">PIT NOW<span class="cmd-sub">Urgent — box now</span></button>
+  <button class="cmd-btn btn-STANDBY"  onclick="send('STANDBY')">STANDBY<span class="cmd-sub">All clear</span></button>
+</div>
+
+<!-- Dual logs -->
+<div id="logs">
+  <div class="log-col">
+    <h2>Car → Pit <span>🚗</span></h2>
+    <div class="log-scroll" id="log-car"></div>
+  </div>
+  <div class="log-col">
+    <h2>Pit → Car <span>📡</span></h2>
+    <div class="log-scroll" id="log-pit"></div>
+  </div>
+</div>
+
+<script>
+const RELAY_URL = 'wss://littlefoot-race-comms-production.up.railway.app';
+
+// ── Driver roster ─────────────────────────────────────────────────────────────
+let currentDriver = null;
+let driverRoster = JSON.parse(localStorage.getItem('driverRoster') || '[]');
+
+function renderRoster() {
+  const roster = document.getElementById('driver-roster');
+  roster.innerHTML = '';
+  if (driverRoster.length === 0) {
+    roster.innerHTML = '<span id="driver-none">No drivers — tap + to add</span>';
+    return;
+  }
+  driverRoster.forEach(name => {
+    const chip = document.createElement('button');
+    chip.className = 'driver-chip' + (name === currentDriver ? ' active' : '');
+    chip.textContent = name;
+    chip.onclick = () => selectDriver(name);
+    roster.appendChild(chip);
+  });
+}
+
+function selectDriver(name) {
+  currentDriver = name;
+  renderRoster();
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'set_driver', name }));
+  }
+}
+
+document.getElementById('driver-add').addEventListener('click', () => {
+  const name = prompt('Driver name:');
+  if (!name || !name.trim()) return;
+  const trimmed = name.trim();
+  if (driverRoster.includes(trimmed)) return;
+  driverRoster.push(trimmed);
+  localStorage.setItem('driverRoster', JSON.stringify(driverRoster));
+  renderRoster();
+  selectDriver(trimmed);
+});
+
+renderRoster();
+
+const MESSAGES = {
+  BOX_NOW:  { text: 'Box now',      sub: 'Come in this lap' },
+  BOX_NEXT: { text: 'Box +1',       sub: 'Box next lap' },
+  FUEL:     { text: 'Fuel',         sub: 'Fuel concern — monitor' },
+  STAY_OUT: { text: 'Stay out',     sub: 'Keep pushing' },
+  ACK:      { text: 'Got it',       sub: 'Pit received your message' },
+  CAUTION:  { text: 'Caution',      sub: 'Slow down — hazard' },
+  PIT_NOW:  { text: 'Pit now',      sub: 'Urgent — box immediately' },
+  STANDBY:  { text: 'Standing by',  sub: '' },
+};
+
+const DRIVER_LABELS = {
+  BOX_REQUEST: { label: '🟥 BOX REQUEST', color: '#C0392B' },
+  FUEL_LOW:    { label: '🟧 FUEL LOW',    color: '#E67E22' },
+  ALL_GOOD:    { label: '🟩 ALL GOOD',    color: '#27AE60' },
+  ACKNOWLEDGE: { label: '✅ ACKNOWLEDGE', color: '#2980B9' },
+};
+
+let ws, reconnectTimer;
+
+function ts() {
+  return new Date().toLocaleTimeString('en-US', { hour12: false });
+}
+
+function addCarLog(text) {
+  const el = document.createElement('div');
+  el.className = 'log-entry car-to-pit';
+  el.innerHTML = `<span class="ts">${ts()}</span><span class="msg">${text}</span>`;
+  const log = document.getElementById('log-car');
+  log.prepend(el);
+  if (log.children.length > 200) log.lastChild.remove();
+}
+
+function addPitLog(text) {
+  const el = document.createElement('div');
+  el.className = 'log-entry pit-to-car';
+  el.innerHTML = `<span class="ts">${ts()}</span><span class="msg">${text}</span>`;
+  const log = document.getElementById('log-pit');
+  log.prepend(el);
+  if (log.children.length > 200) log.lastChild.remove();
+}
+
+function dismissCard(card) {
+  card.classList.add('dismissing');
+  card.addEventListener('animationend', () => {
+    card.remove();
+    if (document.getElementById('alerts').children.length === 0) {
+      const placeholder = document.createElement('div');
+      placeholder.id = 'no-alerts';
+      placeholder.textContent = 'No driver messages yet';
+      document.getElementById('alerts').appendChild(placeholder);
+    }
+  }, { once: true });
+}
+
+function addAlert(code, driver) {
+  const info = DRIVER_LABELS[code];
+  if (!info) return;
+
+  const noAlerts = document.getElementById('no-alerts');
+  if (noAlerts) noAlerts.remove();
+
+  const alerts = document.getElementById('alerts');
+  const card = document.createElement('div');
+  card.className = `alert-card card-${code}`;
+  card.innerHTML = `
+    <div class="alert-left">
+      <span class="alert-label">${info.label}</span>
+      <span class="alert-time">${driver ? `<strong>${driver}</strong> · ` : ''}${ts()}</span>
+    </div>
+    <span class="alert-dismiss">✕</span>
+  `;
+  card.addEventListener('click', () => dismissCard(card));
+  alerts.prepend(card);
+
+  while (alerts.children.length > 10) alerts.lastChild.remove();
+  // playGoat(3);
+}
+
+// Preload roar audio
+const roarAudio = new Audio('roar.mp3');
+roarAudio.load();
+
+function playGoat(count) {
+  // Use real audio file if available
+  if (roarAudio.readyState >= 2) {
+    let plays = 0;
+    function playNext() {
+      if (plays >= count) return;
+      const clip = roarAudio.cloneNode();
+      clip.play().catch(() => {});
+      clip.onended = () => { plays++; playNext(); };
+    }
+    playNext();
+    return;
+  }
+
+  // Fallback synthesis
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Waveshaper distortion curve for that gritty dino rumble
+    function makeDistortion(amount) {
+      const samples = 256;
+      const curve = new Float32Array(samples);
+      for (let i = 0; i < samples; i++) {
+        const x = (i * 2) / samples - 1;
+        curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
+      }
+      return curve;
+    }
+
+    function roar(startTime) {
+      const dur = 1.4;
+
+      // Low rumble — the chest of the roar
+      const low = ctx.createOscillator();
+      low.type = 'sawtooth';
+      low.frequency.setValueAtTime(55,  startTime);
+      low.frequency.linearRampToValueAtTime(95,  startTime + 0.3);
+      low.frequency.linearRampToValueAtTime(130, startTime + 0.7);
+      low.frequency.linearRampToValueAtTime(80,  startTime + 1.1);
+      low.frequency.linearRampToValueAtTime(45,  startTime + dur);
+
+      // Mid screech — the throat of the roar
+      const mid = ctx.createOscillator();
+      mid.type = 'sawtooth';
+      mid.frequency.setValueAtTime(180, startTime);
+      mid.frequency.linearRampToValueAtTime(320, startTime + 0.25);
+      mid.frequency.linearRampToValueAtTime(480, startTime + 0.6);
+      mid.frequency.linearRampToValueAtTime(380, startTime + 0.9);
+      mid.frequency.linearRampToValueAtTime(140, startTime + dur);
+
+      // Slow growl LFO
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 4;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 18;
+      lfo.connect(lfoGain);
+      lfoGain.connect(low.frequency);
+      lfoGain.connect(mid.frequency);
+
+      // Distortion for that crunchy monster texture
+      const dist = ctx.createWaveShaper();
+      dist.curve = makeDistortion(300);
+      dist.oversample = '4x';
+
+      // Low pass to keep it beefy not tinny
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 1800;
+      lp.Q.value = 2;
+
+      // Amplitude envelope — slow build, long sustain, tail off
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0,    startTime);
+      env.gain.linearRampToValueAtTime(0.6, startTime + 0.15);
+      env.gain.setValueAtTime(0.55, startTime + 0.9);
+      env.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
+
+      const envMid = ctx.createGain();
+      envMid.gain.setValueAtTime(0,    startTime);
+      envMid.gain.linearRampToValueAtTime(0.2, startTime + 0.2);
+      envMid.gain.setValueAtTime(0.18, startTime + 0.9);
+      envMid.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
+
+      low.connect(env);
+      mid.connect(envMid);
+      env.connect(dist);
+      envMid.connect(dist);
+      dist.connect(lp);
+      lp.connect(ctx.destination);
+
+      [lfo, low, mid].forEach(n => n.start(startTime));
+      [lfo, low, mid].forEach(n => n.stop(startTime + dur + 0.1));
+    }
+
+    let t = ctx.currentTime + 0.05;
+    for (let i = 0; i < count; i++) {
+      roar(t);
+      t += 1.6;
+    }
+  } catch {}
+}
+
+function send(code) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    alert('Not connected to relay server');
+    return;
+  }
+  const info = MESSAGES[code] || { text: code, sub: '' };
+  ws.send(JSON.stringify({ type: 'pit_message', code, text: info.text, sub: info.sub }));
+  addPitLog(`${code}${currentDriver ? ` (${currentDriver})` : ''}`);
+
+  const btn = document.querySelector(`.btn-${code}`);
+  if (btn) {
+    btn.classList.add('sent');
+    setTimeout(() => btn.classList.remove('sent'), 800);
+  }
+}
+
+function setCarStatus(online) {
+  document.getElementById('status-dot').className = online ? 'online' : 'offline';
+  document.getElementById('status-label').textContent = online ? 'Car connected' : 'Car offline';
+}
+
+function connect() {
+  ws = new WebSocket(RELAY_URL);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'register', role: 'pit' }));
+    addPitLog('connected to relay');
+  };
+
+  ws.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+
+    if (msg.type === 'car_status') {
+      setCarStatus(msg.online);
+      addCarLog(`car ${msg.online ? 'connected ✓' : 'disconnected'}`);
+    } else if (msg.type === 'button_press') {
+      addAlert(msg.code, currentDriver);
+      addCarLog(`${msg.code}${currentDriver ? ` (${currentDriver})` : ''}`);
+    } else if (msg.type === 'set_driver') {
+      currentDriver = msg.name;
+      renderRoster();
+    } else if (msg.type === 'pit_message') {
+      addPitLog(`${msg.code} (other tab)`);
+    }
+  };
+
+  ws.onclose = () => {
+    setCarStatus(false);
+    addPitLog('relay disconnected — reconnecting…');
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+connect();
+</script>
+</body>
+</html>

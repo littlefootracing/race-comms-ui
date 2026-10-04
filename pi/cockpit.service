@@ -1,0 +1,18 @@
+[Unit]
+Description=Littlefoot Racing — Pi Main (relay + GPIO + local WS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jfalicea/race_comms/pi
+Environment=GPIOZERO_PIN_FACTORY=lgpio
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /home/jfalicea/race_comms/pi/pi_main.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
