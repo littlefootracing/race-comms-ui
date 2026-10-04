@@ -91,6 +91,22 @@
   }
   #driver-stats-btn.open { color: #fff; border-color: #E67E22; }
 
+  /* ── Offline alarm banner ── */
+  #offline-banner {
+    display: none; position: sticky; top: 0; z-index: 100;
+    padding: 18px 16px 14px; text-align: center; color: #fff;
+    background: #C0392B; border-bottom: 4px solid #fff;
+    animation: offlinePulse 0.9s ease-in-out infinite;
+  }
+  #offline-banner.show { display: block; }
+  #offline-banner .ob-title { font-size: 34px; font-weight: 900; letter-spacing: 2px; line-height: 1.1; }
+  #offline-banner .ob-sub { font-size: 14px; opacity: 0.9; margin-top: 6px; }
+  #offline-banner .ob-mute {
+    margin-top: 10px; background: rgba(0,0,0,0.35); color: #fff; border: 1px solid rgba(255,255,255,0.6);
+    border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  @keyframes offlinePulse { 0%, 100% { background: #C0392B; } 50% { background: #7B1E15; } }
+
   /* ── Driver stats panel ── */
   #stats-panel { display: none; padding: 10px 16px 14px; border-bottom: 1px solid #222; overflow-x: auto; flex-shrink: 0; }
   #stats-panel.open { display: block; }
@@ -226,6 +242,13 @@
     <span id="status-label">Car offline</span>
   </div>
 </header>
+
+<!-- Big offline alarm -->
+<div id="offline-banner" role="alert">
+  <div class="ob-title" id="ob-title"></div>
+  <div class="ob-sub" id="ob-sub"></div>
+  <button class="ob-mute" id="ob-mute" onclick="toggleMute()">&#128263; Mute alarm sound</button>
+</div>
 
 <!-- Driver selector -->
 <div id="driver-bar">
@@ -466,6 +489,7 @@ $('driver-stats-btn').addEventListener('click', () => {
 setInterval(() => {
   document.querySelectorAll('.chip-timer').forEach((el) => { el.textContent = fmtDur(driveMs(el.dataset.driver)); });
   renderStats();
+  updateOfflineAlert();
 }, 1000);
 
 const MESSAGES = {
@@ -674,6 +698,78 @@ function send(code) {
 function setCarStatus(online) {
   document.getElementById('status-dot').className = online ? 'online' : 'offline';
   document.getElementById('status-label').textContent = online ? 'Car connected' : 'Car offline';
+  carOnline = online;
+  updateOfflineAlert();
+}
+
+// ── Offline alarm ────────────────────────────────────────────────────────────
+const baseTitle = document.title;
+const graceUntil = Date.now() + 4000;   // don't alarm while first connecting
+let relayUp = false, carOnline = null;  // carOnline: null = unknown
+let alarmKind = null, alarmSince = null, alarmMuted = false, alarmTimer = null, titleFlip = false;
+let audioCtx = null;
+
+// Browsers only allow sound after a tap/click, so arm audio on first interaction
+document.addEventListener('click', () => {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch {}
+});
+
+function beep() {
+  try { if (navigator.vibrate) navigator.vibrate([300, 120, 300]); } catch {}
+  if (!audioCtx || audioCtx.state !== 'running') return;
+  const t = audioCtx.currentTime;
+  [0, 0.28].forEach((off) => {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'square'; o.frequency.value = off ? 660 : 880;
+    g.gain.setValueAtTime(0.0001, t + off);
+    g.gain.exponentialRampToValueAtTime(0.25, t + off + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + off + 0.24);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t + off); o.stop(t + off + 0.26);
+  });
+}
+
+function toggleMute() {
+  alarmMuted = !alarmMuted;
+  $('ob-mute').innerHTML = alarmMuted ? '&#128266; Unmute alarm sound' : '&#128263; Mute alarm sound';
+  if (alarmMuted) stopAlarmSound(); else if (alarmKind) startAlarmSound();
+}
+function startAlarmSound() {
+  if (alarmMuted || alarmTimer) return;
+  beep();
+  alarmTimer = setInterval(beep, 2500);
+}
+function stopAlarmSound() { clearInterval(alarmTimer); alarmTimer = null; }
+
+function updateOfflineAlert() {
+  let kind = null;
+  if (!relayUp) { if (Date.now() >= graceUntil) kind = 'relay'; }
+  else if (carOnline === false) kind = 'car';
+
+  const banner = $('offline-banner');
+  if (!kind) {
+    alarmKind = null; alarmSince = null;
+    banner.classList.remove('show');
+    stopAlarmSound();
+    document.title = baseTitle;
+    return;
+  }
+  if (kind !== alarmKind) {            // new or changed alarm: restart clock + sound
+    alarmKind = kind; alarmSince = Date.now();
+    stopAlarmSound();
+  }
+  banner.classList.add('show');
+  $('ob-title').textContent = kind === 'car' ? '🚨 CAR OFFLINE 🚨' : '⚠ NO CONNECTION TO RELAY';
+  $('ob-sub').textContent = (kind === 'car'
+    ? 'Driver will NOT receive pit messages'
+    : 'Dashboard can’t reach the server — car status unknown, reconnecting…')
+    + ' · down ' + fmtDur(Date.now() - alarmSince);
+  titleFlip = !titleFlip;
+  document.title = titleFlip ? (kind === 'car' ? '🚨 CAR OFFLINE' : '⚠ NO RELAY') : baseTitle;
+  startAlarmSound();
 }
 
 function connect() {
@@ -682,6 +778,8 @@ function connect() {
   ws.onopen = () => {
     openedAt = Date.now();
     gotDriverSync = false;
+    relayUp = true;
+    updateOfflineAlert();
     ws.send(JSON.stringify({ type: 'register', role: 'pit' }));
     addPitLog('connected to relay');
     // If the relay has no driver set, push ours so other tabs stay in sync
@@ -709,7 +807,10 @@ function connect() {
   };
 
   ws.onclose = () => {
+    relayUp = false;
     setCarStatus(false);
+    carOnline = null;
+    updateOfflineAlert();
     addPitLog('relay disconnected — reconnecting…');
     clearTimeout(reconnectTimer);
     if (openedAt && Date.now() - openedAt > 30000) retryDelay = 2000;  // was stable, start over
