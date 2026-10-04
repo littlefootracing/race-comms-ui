@@ -76,6 +76,35 @@
   #driver-add:active { color: #fff; border-color: #fff; }
   #driver-none { color: #444; font-size: 12px; font-style: italic; }
 
+  .driver-chip { display: flex; align-items: center; gap: 8px; padding-right: 6px; user-select: none; }
+  .chip-timer { font-variant-numeric: tabular-nums; font-size: 11px; font-weight: 500; opacity: 0.75; }
+  .chip-x {
+    width: 20px; height: 20px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; opacity: 0.55;
+  }
+  .chip-x:hover, .chip-x:active { opacity: 1; background: rgba(0,0,0,0.35); }
+  #driver-stats-btn {
+    height: 28px; border-radius: 14px; padding: 0 10px;
+    border: 1px solid #333; background: none; color: #777;
+    font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+  }
+  #driver-stats-btn.open { color: #fff; border-color: #E67E22; }
+
+  /* ── Driver stats panel ── */
+  #stats-panel { display: none; padding: 10px 16px 14px; border-bottom: 1px solid #222; overflow-x: auto; flex-shrink: 0; }
+  #stats-panel.open { display: block; }
+  .stats-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .stats-head h2 { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+  .stats-reset { background: none; border: 1px solid #333; color: #666; border-radius: 6px; font-size: 11px; padding: 3px 8px; cursor: pointer; }
+  table.stats { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 520px; }
+  table.stats th { text-align: left; color: #555; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; padding: 4px 8px; border-bottom: 1px solid #222; }
+  table.stats td { padding: 7px 8px; border-bottom: 1px solid #161616; vertical-align: top; }
+  table.stats tr.total td { color: #999; border-top: 1px solid #333; border-bottom: none; }
+  table.stats .num { font-variant-numeric: tabular-nums; font-weight: 700; }
+  table.stats .live { color: #E67E22; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 700; margin: 2px 3px 0 0; color: #fff; }
+
   /* ── Driver alert cards ── */
   #alerts {
     padding: 10px 16px;
@@ -203,7 +232,9 @@
   <span id="driver-bar-label">Driver</span>
   <div id="driver-roster"><span id="driver-none">No drivers — tap + to add</span></div>
   <button id="driver-add" title="Add driver">+</button>
+  <button id="driver-stats-btn" title="Driver stats">&#128202; Stats</button>
 </div>
+<div id="stats-panel"></div>
 
 <!-- Driver button alerts -->
 <div id="alerts">
@@ -237,46 +268,205 @@
 <script>
 const RELAY_URL = 'wss://littlefoot-race-comms-production.up.railway.app';
 
-// ── Driver roster ─────────────────────────────────────────────────────────────
-let currentDriver = null;
-let driverRoster = JSON.parse(localStorage.getItem('driverRoster') || '[]');
+// ── Driver roster, drive timers & call stats ─────────────────────────────────
+const STORE_KEY = 'pitState.v1';
+const UNASSIGNED = 'Unassigned';
+const $ = (id) => document.getElementById(id);
+
+function loadState() {
+  try {
+    const st = JSON.parse(localStorage.getItem(STORE_KEY));
+    if (st && st.stats && Array.isArray(st.roster)) return st;
+  } catch {}
+  let roster = [];
+  try { roster = JSON.parse(localStorage.getItem('driverRoster') || '[]'); } catch {}
+  return { roster, current: null, since: null, stats: {} };
+}
+let S = loadState();
+let currentDriver = S.current;
+
+function saveState() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(S));
+    localStorage.setItem('driverRoster', JSON.stringify(S.roster));
+  } catch {}
+}
+function esc(v) {
+  return String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function statFor(name) {
+  const k = name || UNASSIGNED;
+  if (!S.stats[k]) S.stats[k] = { driveMs: 0, stints: 0, sent: {}, recv: {} };
+  return S.stats[k];
+}
+function driveMs(name) {
+  const st = S.stats[name];
+  let ms = st ? st.driveMs : 0;
+  if (name === S.current && S.since) ms += Date.now() - S.since;
+  return ms;
+}
+function fmtDur(ms) {
+  const t = Math.floor(ms / 1000);
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = t % 60;
+  const p = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${p(m)}:${p(sec)}` : `${m}:${p(sec)}`;
+}
+
+function bankCurrent() {
+  if (S.current && S.since) statFor(S.current).driveMs += Date.now() - S.since;
+  S.since = null;
+}
+// Local state change only (used for remote set_driver messages too)
+function applyDriver(name) {
+  name = name || null;
+  if (name === S.current) return;
+  bankCurrent();
+  S.current = name;
+  currentDriver = name;
+  if (name) { S.since = Date.now(); statFor(name).stints++; }
+  saveState();
+  renderRoster();
+  renderStats();
+}
+function sendDriver(name) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'set_driver', name }));
+  }
+}
+// Tap a driver to put them in the car (starts their timer); tap the active driver again to stop the timer.
+function selectDriver(name) {
+  const next = (name === S.current) ? null : name;
+  applyDriver(next);
+  sendDriver(next);
+}
+
+function removeDriver(name) {
+  if (!confirm(`Remove ${name} from the roster?\n\nTheir drive time and call history are kept if you add them back.`)) return;
+  if (S.current === name) { applyDriver(null); sendDriver(null); }
+  S.roster = S.roster.filter((n) => n !== name);
+  saveState();
+  renderRoster();
+  renderStats();
+}
 
 function renderRoster() {
-  const roster = document.getElementById('driver-roster');
+  const roster = $('driver-roster');
   roster.innerHTML = '';
-  if (driverRoster.length === 0) {
+  if (S.roster.length === 0) {
     roster.innerHTML = '<span id="driver-none">No drivers — tap + to add</span>';
     return;
   }
-  driverRoster.forEach(name => {
-    const chip = document.createElement('button');
-    chip.className = 'driver-chip' + (name === currentDriver ? ' active' : '');
-    chip.textContent = name;
+  S.roster.forEach((name) => {
+    const chip = document.createElement('div');
+    chip.className = 'driver-chip' + (name === S.current ? ' active' : '');
+    chip.setAttribute('role', 'button');
+    const label = document.createElement('span');
+    label.textContent = name;
+    const timer = document.createElement('span');
+    timer.className = 'chip-timer';
+    timer.dataset.driver = name;
+    timer.textContent = fmtDur(driveMs(name));
+    const x = document.createElement('span');
+    x.className = 'chip-x';
+    x.textContent = '✕';
+    x.title = 'Remove driver';
+    x.onclick = (e) => { e.stopPropagation(); removeDriver(name); };
+    chip.append(label, timer, x);
     chip.onclick = () => selectDriver(name);
     roster.appendChild(chip);
   });
 }
 
-function selectDriver(name) {
-  currentDriver = name;
-  renderRoster();
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'set_driver', name }));
-  }
-}
-
-document.getElementById('driver-add').addEventListener('click', () => {
+$('driver-add').addEventListener('click', () => {
   const name = prompt('Driver name:');
   if (!name || !name.trim()) return;
   const trimmed = name.trim();
-  if (driverRoster.includes(trimmed)) return;
-  driverRoster.push(trimmed);
-  localStorage.setItem('driverRoster', JSON.stringify(driverRoster));
-  renderRoster();
-  selectDriver(trimmed);
+  if (trimmed === UNASSIGNED) return;
+  if (!S.roster.includes(trimmed)) {
+    S.roster.push(trimmed);
+    saveState();
+    renderRoster();
+  }
+  if (S.current !== trimmed) selectDriver(trimmed);
 });
 
-renderRoster();
+// ── Call stats ──
+function recordCall(dir, code) {
+  const st = statFor(S.current);
+  const bucket = dir === 'recv' ? st.recv : st.sent;
+  bucket[code] = (bucket[code] || 0) + 1;
+  saveState();
+  renderStats();
+}
+
+const PIT_COLORS = {
+  BOX_NOW: '#C0392B', BOX_NEXT: '#E67E22', FUEL: '#D35400', STAY_OUT: '#27AE60',
+  ACK: '#2980B9', CAUTION: '#F1C40F', PIT_NOW: '#8E44AD', STANDBY: '#555',
+};
+const CAR_COLORS = { BOX_REQUEST: '#C0392B', FUEL_LOW: '#E67E22', ALL_GOOD: '#27AE60', ACKNOWLEDGE: '#2980B9' };
+
+function sum(map) { return Object.values(map).reduce((a, b) => a + b, 0); }
+function pills(map, colors) {
+  const ents = Object.entries(map).sort((a, b) => b[1] - a[1]);
+  if (!ents.length) return '<span style="color:#444">—</span>';
+  return ents.map(([c, n]) =>
+    `<span class="pill" style="background:${colors[c] || '#444'};${c === 'CAUTION' ? 'color:#111' : ''}">${esc(c.replace(/_/g, ' '))} ×${n}</span>`
+  ).join('');
+}
+
+function renderStats() {
+  const panel = $('stats-panel');
+  if (!panel.classList.contains('open')) return;
+  const names = [...S.roster];
+  const un = S.stats[UNASSIGNED];
+  if (un && (sum(un.sent) || sum(un.recv))) names.push(UNASSIGNED);
+
+  let totMs = 0, totRecv = 0, totSent = 0;
+  const rows = names.map((name) => {
+    const st = S.stats[name] || { stints: 0, sent: {}, recv: {} };
+    const ms = name === UNASSIGNED ? 0 : driveMs(name);
+    const r = sum(st.recv), t = sum(st.sent);
+    totMs += ms; totRecv += r; totSent += t;
+    const live = name === S.current;
+    return `<tr>
+      <td><strong class="${live ? 'live' : ''}">${live ? '● ' : ''}${esc(name)}</strong></td>
+      <td class="num ${live ? 'live' : ''}">${name === UNASSIGNED ? '—' : fmtDur(ms)}</td>
+      <td class="num">${name === UNASSIGNED ? '—' : st.stints}</td>
+      <td><span class="num">${r}</span> ${pills(st.recv, CAR_COLORS)}</td>
+      <td><span class="num">${t}</span> ${pills(st.sent, PIT_COLORS)}</td>
+    </tr>`;
+  });
+
+  panel.innerHTML = `
+    <div class="stats-head"><h2>Driver stats</h2><button class="stats-reset" onclick="resetStats()">Reset stats</button></div>
+    <table class="stats">
+      <thead><tr><th>Driver</th><th>Drive time</th><th>Stints</th><th>Calls from driver</th><th>Calls to driver</th></tr></thead>
+      <tbody>${rows.join('') || '<tr><td colspan="5" style="color:#444">No drivers yet</td></tr>'}
+        <tr class="total"><td>Total</td><td class="num">${fmtDur(totMs)}</td><td></td><td class="num">${totRecv}</td><td class="num">${totSent}</td></tr>
+      </tbody>
+    </table>`;
+}
+
+function resetStats() {
+  if (!confirm('Reset all drive times and call counts?')) return;
+  S.stats = {};
+  if (S.current) { S.since = Date.now(); statFor(S.current).stints = 1; } else { S.since = null; }
+  saveState();
+  renderRoster();
+  renderStats();
+}
+
+$('driver-stats-btn').addEventListener('click', () => {
+  $('stats-panel').classList.toggle('open');
+  $('driver-stats-btn').classList.toggle('open', $('stats-panel').classList.contains('open'));
+  renderStats();
+});
+
+// Live timers
+setInterval(() => {
+  document.querySelectorAll('.chip-timer').forEach((el) => { el.textContent = fmtDur(driveMs(el.dataset.driver)); });
+  renderStats();
+}, 1000);
 
 const MESSAGES = {
   BOX_NOW:  { text: 'Box now',      sub: 'Come in this lap' },
@@ -297,6 +487,7 @@ const DRIVER_LABELS = {
 };
 
 let ws, reconnectTimer;
+let retryDelay = 2000, openedAt = 0, gotDriverSync = false;
 
 function ts() {
   return new Date().toLocaleTimeString('en-US', { hour12: false });
@@ -346,7 +537,7 @@ function addAlert(code, driver) {
   card.innerHTML = `
     <div class="alert-left">
       <span class="alert-label">${info.label}</span>
-      <span class="alert-time">${driver ? `<strong>${driver}</strong> · ` : ''}${ts()}</span>
+      <span class="alert-time">${driver ? `<strong>${esc(driver)}</strong> · ` : ''}${ts()}</span>
     </div>
     <span class="alert-dismiss">✕</span>
   `;
@@ -470,7 +661,8 @@ function send(code) {
   }
   const info = MESSAGES[code] || { text: code, sub: '' };
   ws.send(JSON.stringify({ type: 'pit_message', code, text: info.text, sub: info.sub }));
-  addPitLog(`${code}${currentDriver ? ` (${currentDriver})` : ''}`);
+  addPitLog(`${code}${currentDriver ? ` (${esc(currentDriver)})` : ''}`);
+  recordCall('sent', code);
 
   const btn = document.querySelector(`.btn-${code}`);
   if (btn) {
@@ -488,8 +680,12 @@ function connect() {
   ws = new WebSocket(RELAY_URL);
 
   ws.onopen = () => {
+    openedAt = Date.now();
+    gotDriverSync = false;
     ws.send(JSON.stringify({ type: 'register', role: 'pit' }));
     addPitLog('connected to relay');
+    // If the relay has no driver set, push ours so other tabs stay in sync
+    setTimeout(() => { if (!gotDriverSync && S.current) sendDriver(S.current); }, 1000);
   };
 
   ws.onmessage = (e) => {
@@ -501,12 +697,14 @@ function connect() {
       addCarLog(`car ${msg.online ? 'connected ✓' : 'disconnected'}`);
     } else if (msg.type === 'button_press') {
       addAlert(msg.code, currentDriver);
-      addCarLog(`${msg.code}${currentDriver ? ` (${currentDriver})` : ''}`);
+      addCarLog(`${msg.code}${currentDriver ? ` (${esc(currentDriver)})` : ''}`);
+      recordCall('recv', msg.code);
     } else if (msg.type === 'set_driver') {
-      currentDriver = msg.name;
-      renderRoster();
+      gotDriverSync = true;
+      applyDriver(msg.name);
     } else if (msg.type === 'pit_message') {
       addPitLog(`${msg.code} (other tab)`);
+      recordCall('sent', msg.code);
     }
   };
 
@@ -514,12 +712,16 @@ function connect() {
     setCarStatus(false);
     addPitLog('relay disconnected — reconnecting…');
     clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(connect, 3000);
+    if (openedAt && Date.now() - openedAt > 30000) retryDelay = 2000;  // was stable, start over
+    openedAt = 0;
+    reconnectTimer = setTimeout(connect, retryDelay + Math.random() * 1000);
+    retryDelay = Math.min(retryDelay * 2, 30000);
   };
 
   ws.onerror = () => ws.close();
 }
 
+renderRoster();
 connect();
 </script>
 </body>
