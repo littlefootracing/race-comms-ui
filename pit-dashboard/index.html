@@ -231,6 +231,39 @@
   .log-entry .msg  { color: #bbb; }
   .log-entry.car-to-pit .msg { color: #E67E22; }
   .log-entry.pit-to-car .msg { color: #2980B9; }
+
+  /* ── RaceBox telemetry panel ── */
+  #racebox { display: none; padding: 10px 16px 14px; border-top: 1px solid #222; flex-shrink: 0; }
+  #racebox.show { display: block; }
+  .rb-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; flex-wrap: wrap; }
+  .rb-head h2 { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+  #rb-health { font-size: 11px; color: #777; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  #rb-health .dot { width: 8px; height: 8px; border-radius: 50%; background: #555; display: inline-block; margin-right: 4px; }
+  #rb-health .ok   .dot { background: #27AE60; }
+  #rb-health .warn .dot { background: #E67E22; }
+  #rb-health .bad  .dot { background: #C0392B; }
+  .rb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .rb-card { background: #1a1a1a; border: 1px solid #262626; border-radius: 10px; padding: 10px 12px; min-width: 0; }
+  .rb-card .lbl { font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+  .rb-big { font-size: 40px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .rb-big small { font-size: 14px; font-weight: 600; color: #777; margin-left: 4px; }
+  .rb-mid { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .rb-card.stale .rb-big, .rb-card.stale .rb-mid { color: #555; }
+  .rb-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 6px; }
+  .rb-best { color: #27AE60; }
+  .rb-card canvas { width: 100%; aspect-ratio: 1 / 1; display: block; margin-top: 6px; }
+  #rb-map { aspect-ratio: 4 / 3; }
+  table.laps { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  table.laps td { padding: 4px 4px; border-bottom: 1px solid #161616; }
+  table.laps td:last-child { text-align: right; color: #888; }
+  table.laps tr.best td { color: #27AE60; font-weight: 700; }
+  table.laps tr.slow td { color: #555; }
+  .rb-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+  .rb-btn { background: #1a1a1a; border: 1px solid #333; color: #bbb; border-radius: 8px; padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .rb-btn:active { opacity: 0.7; }
+  #rb-note { font-size: 12px; color: #E67E22; }
+  #rb-noline { display: none; margin-bottom: 8px; padding: 8px 10px; border: 1px dashed #5a3a14; border-radius: 8px; color: #E67E22; font-size: 12px; line-height: 1.4; }
+  #rb-noline.show { display: block; }
 </style>
 </head>
 <body>
@@ -274,6 +307,46 @@
   <button class="cmd-btn btn-CAUTION"  onclick="send('CAUTION')">CAUTION<span class="cmd-sub">Slow down</span></button>
   <button class="cmd-btn btn-PIT_NOW"  onclick="send('PIT_NOW')">PIT NOW<span class="cmd-sub">Urgent — box now</span></button>
   <button class="cmd-btn btn-STANDBY"  onclick="send('STANDBY')">STANDBY<span class="cmd-sub">All clear</span></button>
+</div>
+
+<!-- RaceBox telemetry & lap timing (hidden until the car sends data) -->
+<div id="racebox">
+  <div class="rb-head">
+    <h2>RaceBox · Telemetry &amp; Laps</h2>
+    <div id="rb-health"></div>
+  </div>
+  <div id="rb-noline">No start/finish line set. Tap <b>Set S/F line</b> while the car is moving on track — anywhere works, lap times only need a consistent line.</div>
+  <div class="rb-grid">
+    <div class="rb-card" id="rb-speed-card">
+      <div class="lbl">Speed</div>
+      <div class="rb-big"><span id="rb-speed">–</span><small>km/h</small></div>
+      <div class="rb-row"><span class="lbl">Heading</span><span id="rb-heading">–</span></div>
+    </div>
+    <div class="rb-card" id="rb-lap-card">
+      <div class="lbl">Current lap <span id="rb-lapn"></span></div>
+      <div class="rb-big" id="rb-lapclock">–:––.–––</div>
+      <div class="rb-row"><span class="lbl">Last</span><span class="rb-mid" id="rb-last">–:––.–––</span></div>
+      <div class="rb-row"><span class="lbl">Best</span><span class="rb-mid rb-best" id="rb-best">–:––.–––</span></div>
+    </div>
+    <div class="rb-card">
+      <div class="lbl">Laps</div>
+      <table class="laps"><tbody id="rb-laps"></tbody></table>
+    </div>
+    <div class="rb-card">
+      <div class="lbl">G-force <span id="rb-g" style="float:right;color:#bbb"></span></div>
+      <canvas id="rb-gg"></canvas>
+    </div>
+    <div class="rb-card" style="grid-column: span 2; min-width: 240px;">
+      <div class="lbl">Track</div>
+      <canvas id="rb-map"></canvas>
+    </div>
+  </div>
+  <div class="rb-actions">
+    <button class="rb-btn" id="rb-setline">&#127937; Set S/F line</button>
+    <button class="rb-btn" id="rb-clearline">Clear line</button>
+    <button class="rb-btn" id="rb-resetlaps">Reset laps</button>
+    <span id="rb-note"></span>
+  </div>
 </div>
 
 <!-- Dual logs -->
@@ -772,6 +845,136 @@ function updateOfflineAlert() {
   startAlarmSound();
 }
 
+// ── RaceBox telemetry panel ──────────────────────────────────────────────────
+const RB = { tele: null, teleAt: 0, lapBase: null, status: null, laps: [], best: null, line: null, trail: [], gg: [] };
+const TELE_STALE_MS = 3000;
+function fmtLap(ms) {
+  if (ms == null) return '–:––.–––';
+  const m = Math.floor(ms / 60000), s = (ms % 60000) / 1000;
+  return `${m}:${s.toFixed(3).padStart(6, '0')}`;
+}
+function rbNote(text) {
+  $('rb-note').textContent = text || '';
+  clearTimeout(rbNote.t);
+  if (text) rbNote.t = setTimeout(() => { $('rb-note').textContent = ''; }, 6000);
+}
+function onTelemetry(t) {
+  RB.tele = t; RB.teleAt = Date.now();
+  RB.lapBase = t.lap_ms == null ? null : { ms: t.lap_ms, at: Date.now() };
+  if (t.fix) {
+    const last = RB.trail[RB.trail.length - 1];
+    if (!last || last[0] !== t.lat || last[1] !== t.lon) RB.trail.push([t.lat, t.lon]);
+    if (RB.trail.length > 800) RB.trail.shift();
+  }
+  RB.gg.push([t.gy, t.gx]);
+  if (RB.gg.length > 12) RB.gg.shift();
+  $('racebox').classList.add('show');
+}
+function onLapState(m) {
+  RB.line = m.line; RB.laps = m.laps || []; RB.best = m.best_ms;
+  $('racebox').classList.add('show');
+}
+function onLap(m) {
+  addCarLog(`LAP ${m.n} · ${fmtLap(m.ms)}${m.best ? ' ★ best' : ''}`);
+}
+function rbSend(obj) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+  else rbNote('Not connected to relay');
+}
+$('rb-setline').onclick = () => rbSend({ type: 'set_start_line' });
+$('rb-clearline').onclick = () => { if (confirm('Clear the start/finish line?')) rbSend({ type: 'clear_start_line' }); };
+$('rb-resetlaps').onclick = () => { if (confirm('Reset all laps and best time?')) rbSend({ type: 'reset_laps' }); };
+
+function fitCanvas(c) {
+  const r = c.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+  const w = Math.round(r.width * d), h = Math.round(r.height * d);
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  const g = c.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0);
+  return { g, w: r.width, h: r.height };
+}
+// G-G circle: horizontal = lateral (Y), vertical = longitudinal (X). Sign depends on how the RaceBox is mounted.
+function drawGG() {
+  const { g, w, h } = fitCanvas($('rb-gg'));
+  g.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h / 2, R = Math.min(w, h) / 2 - 4, MAXG = 1.5;
+  g.strokeStyle = '#2a2a2a'; g.lineWidth = 1;
+  for (const r of [0.5, 1.0, 1.5]) { g.beginPath(); g.arc(cx, cy, R * r / MAXG, 0, 7); g.stroke(); }
+  g.beginPath(); g.moveTo(cx - R, cy); g.lineTo(cx + R, cy); g.moveTo(cx, cy - R); g.lineTo(cx, cy + R); g.stroke();
+  RB.gg.forEach(([x, y], i) => {
+    const px = cx + Math.max(-MAXG, Math.min(MAXG, x)) / MAXG * R;
+    const py = cy - Math.max(-MAXG, Math.min(MAXG, y)) / MAXG * R;
+    const last = i === RB.gg.length - 1;
+    g.fillStyle = last ? '#E67E22' : `rgba(230,126,34,${0.08 + 0.4 * i / RB.gg.length})`;
+    g.beginPath(); g.arc(px, py, last ? 5 : 3, 0, 7); g.fill();
+  });
+}
+function drawMap() {
+  const { g, w, h } = fitCanvas($('rb-map'));
+  g.clearRect(0, 0, w, h);
+  const pts = RB.trail.slice();
+  if (RB.line) pts.push(RB.line.a, RB.line.b);
+  if (pts.length < 2) return;
+  const lat0 = pts[0][0], lon0 = pts[0][1], kx = Math.cos(lat0 * Math.PI / 180);
+  const P = ([la, lo]) => [(lo - lon0) * kx, la - lat0];
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const p of pts) { const [x, y] = P(p); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const pad = 12, sc = Math.min((w - 2 * pad) / Math.max(x1 - x0, 1e-9), (h - 2 * pad) / Math.max(y1 - y0, 1e-9));
+  const X = (x) => pad + (w - 2 * pad - (x1 - x0) * sc) / 2 + (x - x0) * sc;
+  const Y = (y) => h - (pad + (h - 2 * pad - (y1 - y0) * sc) / 2 + (y - y0) * sc);
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  g.strokeStyle = '#4a4a4a'; g.lineWidth = 3; g.beginPath();
+  RB.trail.forEach((p, i) => { const [x, y] = P(p); i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y)); });
+  g.stroke();
+  if (RB.line) {
+    const [ax, ay] = P(RB.line.a), [bx, by] = P(RB.line.b);
+    g.strokeStyle = '#fff'; g.lineWidth = 3; g.beginPath(); g.moveTo(X(ax), Y(ay)); g.lineTo(X(bx), Y(by)); g.stroke();
+  }
+  const t = RB.tele;
+  if (t && t.fix) {
+    const [x, y] = P([t.lat, t.lon]);
+    g.fillStyle = '#E67E22'; g.beginPath(); g.arc(X(x), Y(y), 6, 0, 7); g.fill();
+  }
+}
+function rbRender() {
+  if (!$('racebox').classList.contains('show')) return;
+  const t = RB.tele, stale = !t || Date.now() - RB.teleAt > TELE_STALE_MS;
+  ['rb-speed-card', 'rb-lap-card'].forEach((id) => $(id).classList.toggle('stale', stale));
+
+  $('rb-speed').textContent = t && !stale ? Math.round(t.speed_kph) : '–';
+  $('rb-heading').textContent = t && !stale ? `${t.heading}°` : '–';
+  $('rb-g').textContent = t && !stale ? `${Math.hypot(t.gx, t.gy).toFixed(2)} g` : '';
+
+  const base = RB.lapBase;
+  $('rb-lapclock').textContent = base && !stale ? fmtLap(base.ms + (Date.now() - base.at)) : '–:––.–––';
+  $('rb-lapn').textContent = t && t.lap_n && !stale ? `· ${t.lap_n}` : '';
+  const last = RB.laps[RB.laps.length - 1];
+  $('rb-last').textContent = fmtLap(last ? last.ms : null);
+  $('rb-best').textContent = fmtLap(RB.best);
+  $('rb-noline').classList.toggle('show', !RB.line);
+
+  const rows = RB.laps.slice(-6).reverse().map((l) => {
+    const d = RB.best != null ? l.ms - RB.best : 0;
+    const slow = RB.best != null && l.ms > RB.best * 1.5;
+    return `<tr class="${l.ms === RB.best ? 'best' : slow ? 'slow' : ''}"><td>${l.n}</td><td>${fmtLap(l.ms)}</td><td>${
+      slow ? 'slow/pit?' : d === 0 ? 'best' : '+' + (d / 1000).toFixed(3)}</td></tr>`;
+  }).join('');
+  $('rb-laps').innerHTML = rows || '<tr><td style="color:#555">No laps yet</td></tr>';
+
+  const st = RB.status || {};
+  const bits = [];
+  const cls = st.connected ? 'ok' : st.state === 'scanning' ? 'warn' : 'bad';
+  const label = st.state === 'simulated' ? 'SIMULATED' : st.connected ? 'RaceBox' : st.state === 'scanning' ? 'RaceBox searching…' : 'RaceBox offline';
+  bits.push(`<span class="${cls}"><span class="dot"></span>${label}</span>`);
+  if (t && !stale) {
+    bits.push(`<span class="${t.fix ? (t.h_acc <= 3 ? 'ok' : 'warn') : 'bad'}"><span class="dot"></span>${t.fix ? `GPS ${t.sats} sats · ±${t.h_acc} m` : 'NO GPS FIX'}</span>`);
+    bits.push(`<span class="${t.batt > 30 || t.charging ? 'ok' : t.batt > 15 ? 'warn' : 'bad'}"><span class="dot"></span>${t.batt}%${t.charging ? ' ⚡' : ''}</span>`);
+  }
+  $('rb-health').innerHTML = bits.join('');
+
+  drawGG(); drawMap();
+}
+setInterval(rbRender, 100);
+
 function connect() {
   ws = new WebSocket(RELAY_URL);
 
@@ -797,6 +1000,17 @@ function connect() {
       addAlert(msg.code, currentDriver);
       addCarLog(`${msg.code}${currentDriver ? ` (${esc(currentDriver)})` : ''}`);
       recordCall('recv', msg.code);
+    } else if (msg.type === 'telemetry') {
+      onTelemetry(msg);
+    } else if (msg.type === 'lap_state') {
+      onLapState(msg);
+    } else if (msg.type === 'lap') {
+      onLap(msg);
+    } else if (msg.type === 'racebox_status') {
+      RB.status = msg;
+      $('racebox').classList.add('show');
+    } else if (msg.type === 'line_result') {
+      rbNote(msg.ok ? 'Start/finish line set' : msg.reason);
     } else if (msg.type === 'set_driver') {
       gotDriverSync = true;
       applyDriver(msg.name);

@@ -18,6 +18,7 @@ grep -n 'wss\|ws://' pit-dashboard/index.html
 - `pit-dashboard/index.html` — Pit crew browser app (connects to relay via WSS)
 - `pi/pi_main.py` — Runs on Raspberry Pi in car; reads GPIO buttons, connects to relay
 - `pi/cockpit.html` — Fullscreen kiosk display shown inside the car
+- `pi/racebox.py` / `pi/laptimer.py` — RaceBox Mini S BLE telemetry + GPS lap timing (see SETUP.md §5); `RACEBOX_MODE=sim` runs with no hardware
 
 ### Run the Relay Locally (dev)
 ```bash

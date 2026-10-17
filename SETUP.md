@@ -22,8 +22,9 @@ sudo systemctl enable ssh && sudo systemctl start ssh
 
 ### Install Python deps on Pi
 ```bash
-pip3 install websockets RPi.GPIO
+pip3 install websockets RPi.GPIO bleak
 ```
+`bleak` is only needed for the RaceBox (see section 5).
 
 ### Copy files to Pi
 ```bash
@@ -61,6 +62,26 @@ Open `pit-dashboard/index.html` directly from the relay server URL, or host it a
 
 Pins use internal pull-up. Button = normally open, connects pin to GND.
 
+## 5. RaceBox Mini S (telemetry + lap timing)
+`pi_main.py` connects to the RaceBox over BLE (Pi needs Bluetooth, `bleak` installed) and sends the pit
+speed, G-force, GPS position/health, battery and lap times at 5 Hz. Lap detection itself runs on the Pi at the full 25 Hz.
+
+| Env var (add as `Environment=` in `cockpit.service`) | Meaning |
+|---|---|
+| `RACEBOX_MODE` | `ble` (default), `sim` (fake car lapping a loop — no hardware needed), `off` |
+| `RACEBOX_ADDRESS` | Optional BLE address; otherwise the first device named "RaceBox Mini S…" is used |
+| `RACEBOX_RECORD=1` | Also start the Mini S's on-board standalone recording (backup log, RaceBox's recommended filters) |
+| `RACEBOX_CODE` | Memory security code, only if you enabled memory protection on the device |
+| `RACEBOX_SIM_LAP_S` | Simulated lap length in seconds (default 45) |
+
+**Lap timing:** the device has no lap timer, so the pit sets a start/finish line from the dashboard:
+tap **Set S/F line** while the car is moving on track. The line is placed across the car's direction of
+travel where it is at that moment. Anywhere works — lap times only need a consistent line. It is saved to
+`pi/startline.json` and survives reboots. Laps under 20 s are ignored as double triggers.
+
+**Try it without hardware:** `RACEBOX_MODE=sim python3 pi/pi_main.py`, or run the protocol/lap-timer tests:
+`python3 -m unittest discover -s pi -p 'test_*.py'`.
+
 ## Files
 ```
 race_comms/
@@ -71,7 +92,10 @@ race_comms/
 ├── pit-dashboard/
 │   └── index.html      ← Pit crew browser app
 └── pi/
-    ├── pi_main.py      ← GPIO + relay client + local WS server
+    ├── pi_main.py      ← GPIO + relay client + local WS server + RaceBox
+    ├── racebox.py      ← RaceBox BLE protocol, BLE client, simulator
+    ├── laptimer.py     ← GPS start/finish line lap timing
+    ├── test_racebox.py ← protocol + lap timer tests (no hardware)
     ├── cockpit.html    ← Fullscreen kiosk display
     ├── cockpit.service ← systemd for pi_main.py
     └── chromium.service← systemd for Chromium kiosk
