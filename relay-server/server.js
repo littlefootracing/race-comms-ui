@@ -7,6 +7,11 @@ const wss = new WebSocketServer({ port: PORT });
 const clients = new Set();
 let currentDriver = null;
 
+// RaceBox: car → pit message types, and last-known state replayed to newly connected pit tabs
+const CAR_TO_PIT = new Set(['telemetry', 'lap', 'lap_state', 'racebox_status', 'line_result']);
+const PIT_TO_CAR = new Set(['set_start_line', 'clear_start_line', 'reset_laps']);
+const cached = { lap_state: null, racebox_status: null };
+
 function broadcast(data, excludeSocket) {
   const msg = JSON.stringify(data);
   for (const client of clients) {
@@ -53,6 +58,9 @@ wss.on('connection', (ws, req) => {
         if (currentDriver) {
           ws.send(JSON.stringify({ type: 'set_driver', name: currentDriver }));
         }
+        for (const m of Object.values(cached)) {
+          if (m && carOnline) ws.send(JSON.stringify(m));
+        }
       }
       // Tell pit crew a car just connected
       if (ws.role === 'car') {
@@ -81,6 +89,21 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
+    // Car → pit: RaceBox telemetry / laps  (telemetry is high-rate: not logged)
+    if (CAR_TO_PIT.has(msg.type) && ws.role === 'car') {
+      if (msg.type in cached) cached[msg.type] = msg;
+      if (msg.type !== 'telemetry') console.log(`[→pit] ${msg.type}`);
+      sendTo('pit', msg);
+      return;
+    }
+
+    // Pit → car: lap timer commands  { type: "set_start_line" | "clear_start_line" | "reset_laps" }
+    if (PIT_TO_CAR.has(msg.type) && ws.role === 'pit') {
+      console.log(`[→car] ${msg.type}`);
+      sendTo('car', msg);
+      return;
+    }
+
     // Pit → pit: set_driver  { type: "set_driver", name: "John" }
     if (msg.type === 'set_driver' && ws.role === 'pit') {
       currentDriver = msg.name;
@@ -99,6 +122,7 @@ wss.on('connection', (ws, req) => {
     clients.delete(ws);
     console.log(`[-] ${role || 'unknown'} disconnected (${clients.size} total)`);
     if (role === 'car') {
+      cached.racebox_status = null;
       sendTo('pit', { type: 'car_status', online: false });
     }
   });

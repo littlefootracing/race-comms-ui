@@ -2,3 +2,5 @@ node_modules/
 .DS_Store
 .claude/settings.local.json
 .railway/
+pi/startline.json
+__pycache__/
