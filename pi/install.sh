@@ -36,6 +36,29 @@ touch "$HOME/.config/labwc/autostart"
 grep -qs chromium-kiosk.sh "$HOME/.config/labwc/autostart" || \
   echo "$PI_DIR/chromium-kiosk.sh &" >> "$HOME/.config/labwc/autostart"
 
+echo "== Start Cockpit launcher (desktop icon + app menu) for after 'Exit to desktop'"
+LAUNCHER="[Desktop Entry]
+Type=Application
+Name=Start Cockpit
+Comment=Return to the Littlefoot Racing cockpit screen
+Exec=$PI_DIR/chromium-kiosk.sh --resume
+Icon=applications-games
+Terminal=false
+Categories=Utility;"
+mkdir -p "$HOME/.local/share/applications" "$HOME/Desktop"
+printf '%s\n' "$LAUNCHER" > "$HOME/.local/share/applications/littlefoot-cockpit.desktop"
+printf '%s\n' "$LAUNCHER" > "$HOME/Desktop/Start Cockpit.desktop"
+chmod +x "$HOME/Desktop/Start Cockpit.desktop" "$HOME/.local/share/applications/littlefoot-cockpit.desktop"
+# open .desktop files without the "Execute / Open?" prompt in the file manager
+mkdir -p "$HOME/.config/libfm"
+if [ -f "$HOME/.config/libfm/libfm.conf" ]; then
+  grep -q '^quick_exec=' "$HOME/.config/libfm/libfm.conf" \
+    && sed -i 's/^quick_exec=.*/quick_exec=1/' "$HOME/.config/libfm/libfm.conf" \
+    || sed -i '/^\[config\]/a quick_exec=1' "$HOME/.config/libfm/libfm.conf"
+else
+  printf '[config]\nquick_exec=1\n' > "$HOME/.config/libfm/libfm.conf"
+fi
+
 echo "== Boot to desktop with auto-login"
 sudo raspi-config nonint do_boot_behaviour B4 || echo "!! set Desktop Autologin in raspi-config manually"
 

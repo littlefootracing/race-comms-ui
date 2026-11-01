@@ -102,7 +102,7 @@ The first press of each button still sends its normal message to the pit, so tel
 - SD card in a Mac: create an empty file named `nokiosk` on the `bootfs` drive. Kiosk stays off until you delete it (`sudo rm /boot/firmware/nokiosk`).
 - SSH: `touch ~/nokiosk && pkill -f chromium`.
 
-**Back to the cockpit:** reboot, or run `~/race_comms/pi/chromium-kiosk.sh --resume`.
+**Back to the cockpit:** double-click **Start Cockpit** on the desktop (also in the app menu), reboot, or run `~/race_comms/pi/chromium-kiosk.sh --resume`.
 
 **Wi-Fi from a terminal** (NetworkManager on Bookworm) — save every network the car will see, highest priority first:
 ```bash

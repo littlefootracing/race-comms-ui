@@ -17,7 +17,8 @@ if [ "$1" = "--resume" ]; then
     echo "Delete /boot/firmware/nokiosk first: sudo rm /boot/firmware/nokiosk" >&2
     exit 1
   fi
-  pgrep -f "chromium-kiosk.sh" | grep -vx "$$" > /dev/null && exit 0  # already running
+  # already running? (the kiosk loop's command line ends in the script name; this --resume call doesn't)
+  pgrep -f "chromium-kiosk\.sh$" > /dev/null && exit 0
   setsid "$0" > /dev/null 2>&1 < /dev/null &
   exit 0
 fi
