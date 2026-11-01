@@ -82,6 +82,59 @@ travel where it is at that moment. Anywhere works — lap times only need a cons
 **Try it without hardware:** `RACEBOX_MODE=sim python3 pi/pi_main.py`, or run the protocol/lap-timer tests:
 `python3 -m unittest discover -s pi -p 'test_*.py'`.
 
+## 6. Getting out of the kiosk (Wi-Fi, terminal, shutdown)
+
+The cockpit runs from labwc autostart (`~/.config/labwc/autostart` → `chromium-kiosk.sh`).
+If `chromium.service` is enabled too, turn it off — it relaunches Chromium every 5 s and fights you:
+`sudo systemctl disable --now chromium.service`
+
+**Exit to desktop / shut down from the car buttons** (BOX REQUEST is never used, so a real box call can't trigger these):
+
+| Hold together | For | Does |
+|---|---|---|
+| ALL GOOD + ACKNOWLEDGE | 3 s | Closes the kiosk → normal desktop (Wi-Fi menu, terminal, power menu) |
+| FUEL LOW + ACKNOWLEDGE | 5 s | Safe shutdown — use this instead of pulling power |
+
+The first press of each button still sends its normal message to the pit, so tell the pit before doing this.
+
+**Other ways in:**
+- Keyboard plugged in: `Ctrl+Alt+F2` gives a text login, or `Alt+F4` then quickly open a terminal.
+- SD card in a Mac: create an empty file named `nokiosk` on the `bootfs` drive. Kiosk stays off until you delete it (`sudo rm /boot/firmware/nokiosk`).
+- SSH: `touch ~/nokiosk && pkill -f chromium`.
+
+**Back to the cockpit:** reboot, or run `~/race_comms/pi/chromium-kiosk.sh --resume`.
+
+**Wi-Fi from a terminal** (NetworkManager on Bookworm) — save every network the car will see, highest priority first:
+```bash
+nmcli dev wifi list
+sudo nmcli dev wifi connect "STARLINK-SSID" password "..."
+sudo nmcli dev wifi connect "Phone Hotspot" password "..."
+sudo nmcli connection modify "STARLINK-SSID" connection.autoconnect-priority 20
+sudo nmcli connection modify "Phone Hotspot" connection.autoconnect-priority 10
+```
+Or `sudo nmtui` for a menu. Power off from a terminal: `sudo poweroff`.
+
+## 7. Bench-test the RaceBox
+```bash
+sudo apt install -y python3-bleak          # or: pip3 install --break-system-packages bleak
+sudo systemctl stop cockpit.service        # frees the BLE connection
+cd ~/race_comms/pi && python3 racebox_scan.py
+```
+Close the RaceBox phone app first — the device takes one connection at a time. Don't pair it in the
+desktop Bluetooth menu; it isn't needed. Copy the address it prints into `cockpit.service` as
+`Environment=RACEBOX_ADDRESS=...`, then `sudo systemctl daemon-reload && sudo systemctl start cockpit.service`.
+The pit dashboard header should turn green ("RaceBox").
+
+## 8. Setup screen in the cockpit (Wi-Fi + RaceBox)
+Tap the status chip in the top-right corner of the cockpit (Wi-Fi / RaceBox / Pit dots).
+- **Wi-Fi:** see the current network, signal and IP. *Change network* lists nearby networks; saved and
+  open ones join with a tap, new ones pop up an on-screen keyboard for the password.
+- **RaceBox:** connection, GPS fix, satellites, battery. *Find RaceBox* scans ~8 s; tap your unit to pair it
+  (saved to `pi/racebox.json`, survives reboots and deploys). *Use any RaceBox* goes back to first-found.
+- **Pit link:** relay status and whether a start/finish line is set, plus hold-to-confirm *Exit to desktop*
+  and *Shut down*.
+Any pit call (BOX, PIT NOW, …) closes the setup screen immediately; it also closes itself after 2 min.
+
 ## Files
 ```
 race_comms/
@@ -96,6 +149,9 @@ race_comms/
     ├── racebox.py      ← RaceBox BLE protocol, BLE client, simulator
     ├── laptimer.py     ← GPS start/finish line lap timing
     ├── test_racebox.py ← protocol + lap timer tests (no hardware)
+    ├── racebox_scan.py ← bench test: find the RaceBox and print live data
+    ├── netinfo.py      ← Wi-Fi status/scan/join for the setup screen (nmcli)
+    ├── install.sh      ← one-shot Pi setup (deploy-pi.sh runs it)
     ├── cockpit.html    ← Fullscreen kiosk display
     ├── cockpit.service ← systemd for pi_main.py
     └── chromium.service← systemd for Chromium kiosk

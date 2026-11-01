@@ -227,9 +227,47 @@ class RaceBoxBLE:
 
     async def _find(self, BleakScanner):
         if self.address:
-            return await BleakScanner.find_device_by_address(self.address, timeout=10)
-        return await BleakScanner.find_device_by_filter(
-            lambda d, ad: bool(d.name) and d.name.startswith(NAME_PREFIXES), timeout=10)
+            dev = await BleakScanner.find_device_by_address(self.address, timeout=10)
+        else:
+            # BlueZ often reports the name only in the advertisement (local_name), not d.name
+            dev = await BleakScanner.find_device_by_filter(
+                lambda d, ad: (d.name or ad.local_name or "").startswith(NAME_PREFIXES), timeout=10)
+        if dev is None:
+            # A RaceBox already connected at the OS level (paired in the desktop Bluetooth menu, or
+            # left over from an earlier session) stops advertising, so a scan never sees it and we'd
+            # search forever. We don't need OS pairing, so drop that link and scan again.
+            held = await bluez_connected_racebox(self.address)
+            if held:
+                addr, name = held
+                log.warning(f"{name} [{addr}] is held by the OS Bluetooth stack — releasing it")
+                self.on_status({"connected": False, "state": "scanning", "note": "released OS pairing"})
+                await _bluetoothctl("disconnect", addr)
+                await _bluetoothctl("remove", addr)       # unpair so BlueZ doesn't grab it again
+                await asyncio.sleep(2)
+                dev = await BleakScanner.find_device_by_address(addr, timeout=10)
+        return dev
+
+
+async def _bluetoothctl(*args, timeout=8):
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "bluetoothctl", *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout)
+        return out.decode(errors="replace")
+    except (OSError, asyncio.TimeoutError):
+        return ""
+
+
+async def bluez_connected_racebox(address=None):
+    """(address, name) of a RaceBox BlueZ already holds a connection to, else None. Linux only."""
+    out = await _bluetoothctl("devices", "Connected")
+    for line in out.splitlines():
+        parts = line.split(" ", 2)          # "Device AA:BB:CC:DD:EE:FF RaceBox Mini S 123"
+        if len(parts) == 3 and parts[0] == "Device":
+            addr, name = parts[1], parts[2]
+            if (address and addr.upper() == address.upper()) or (not address and name.startswith(NAME_PREFIXES)):
+                return addr, name
+    return None
 
 
 # ── Simulator ────────────────────────────────────────────────────────────────

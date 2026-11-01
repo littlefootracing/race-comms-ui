@@ -183,6 +183,11 @@
   .cmd-btn:active { opacity: 0.75; transform: scale(0.97); }
   .cmd-btn .cmd-sub { font-size: 10px; font-weight: 400; opacity: 0.75; text-transform: none; }
   .cmd-btn.sent { outline: 3px solid white; }
+  #car-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 0 16px 12px; }
+  #car-tools button { background: #2a2f37; color: #fff; border: 1px solid #3a404a; border-radius: 8px;
+                      padding: 10px 16px; font-size: 14px; font-weight: 700; cursor: pointer; }
+  #car-tools button:active { opacity: .75; }
+  #car-tools-note { font-size: 13px; color: #aaa; }
 
   .btn-BOX_NOW   { background: #C0392B; }
   .btn-BOX_NEXT  { background: #E67E22; }
@@ -307,6 +312,11 @@
   <button class="cmd-btn btn-CAUTION"  onclick="send('CAUTION')">CAUTION<span class="cmd-sub">Slow down</span></button>
   <button class="cmd-btn btn-PIT_NOW"  onclick="send('PIT_NOW')">PIT NOW<span class="cmd-sub">Urgent — box now</span></button>
   <button class="cmd-btn btn-STANDBY"  onclick="send('STANDBY')">STANDBY<span class="cmd-sub">All clear</span></button>
+</div>
+
+<div id="car-tools">
+  <button id="reset-drive-timer">&#9201; Reset cockpit drive timer</button>
+  <span id="car-tools-note"></span>
 </div>
 
 <!-- RaceBox telemetry & lap timing (hidden until the car sends data) -->
@@ -883,6 +893,18 @@ function rbSend(obj) {
 }
 $('rb-setline').onclick = () => rbSend({ type: 'set_start_line' });
 $('rb-clearline').onclick = () => { if (confirm('Clear the start/finish line?')) rbSend({ type: 'clear_start_line' }); };
+$('reset-drive-timer').onclick = () => {
+  if (!confirm('Reset the drive timer on the car\'s cockpit screen to 0:00:00?')) return;
+  if (!(ws && ws.readyState === 1)) return carToolsNote('Not connected to relay');
+  ws.send(JSON.stringify({ type: 'reset_drive_timer' }));
+  carToolsNote('Sent — waiting for car…');
+};
+let carToolsTimer = null;
+function carToolsNote(t) {
+  $('car-tools-note').textContent = t;
+  clearTimeout(carToolsTimer);
+  carToolsTimer = setTimeout(() => $('car-tools-note').textContent = '', 8000);
+}
 $('rb-resetlaps').onclick = () => { if (confirm('Reset all laps and best time?')) rbSend({ type: 'reset_laps' }); };
 
 function fitCanvas(c) {
@@ -1009,6 +1031,9 @@ function connect() {
     } else if (msg.type === 'racebox_status') {
       RB.status = msg;
       $('racebox').classList.add('show');
+    } else if (msg.type === 'drive_timer_reset') {
+      carToolsNote(msg.ok ? 'Drive timer reset ✓' : `Not reset: ${msg.reason}`);
+      addPitLog && addPitLog(msg.ok ? 'Drive timer reset' : 'Drive timer reset failed');
     } else if (msg.type === 'line_result') {
       rbNote(msg.ok ? 'Start/finish line set' : msg.reason);
     } else if (msg.type === 'set_driver') {

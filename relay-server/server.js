@@ -8,8 +8,8 @@ const clients = new Set();
 let currentDriver = null;
 
 // RaceBox: car → pit message types, and last-known state replayed to newly connected pit tabs
-const CAR_TO_PIT = new Set(['telemetry', 'lap', 'lap_state', 'racebox_status', 'line_result']);
-const PIT_TO_CAR = new Set(['set_start_line', 'clear_start_line', 'reset_laps']);
+const CAR_TO_PIT = new Set(['telemetry', 'lap', 'lap_state', 'racebox_status', 'line_result', 'drive_timer_reset']);
+const PIT_TO_CAR = new Set(['set_start_line', 'clear_start_line', 'reset_laps', 'reset_drive_timer']);
 const cached = { lap_state: null, racebox_status: null };
 
 function broadcast(data, excludeSocket) {

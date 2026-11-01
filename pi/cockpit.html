@@ -218,6 +218,70 @@
   #screen.dark-text #clock,
   #screen.dark-text #ws-status,
   #screen.dark-text #team-name { color: #111111; }
+
+  /* ── Status chip (opens setup) ─────────────────────────────────────────── */
+  #status-chip {
+    position: absolute; top: 8px; right: 10px; z-index: 50;
+    display: flex; gap: 14px; align-items: center;
+    padding: 8px 14px; border-radius: 22px;
+    background: rgba(255,255,255,0.06);
+    font: 14px 'Courier New', monospace; letter-spacing: 1px;
+    color: rgba(255,255,255,0.55);
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  #status-chip .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:-1px; background:#666; }
+  .dot.ok { background:#2ecc71 !important; } .dot.warn { background:#f1c40f !important; } .dot.bad { background:#e74c3c !important; }
+  #screen.dark-text #status-chip { color: rgba(0,0,0,0.6); background: rgba(0,0,0,0.08); }
+
+  /* ── Setup overlay ────────────────────────────────────────────────────── */
+  #setup {
+    position: fixed; inset: 0; z-index: 100; display: none;
+    background: #0d0f12; color: #eee;
+    font-family: Arial, sans-serif;
+    padding: 2.5vh 3vw; overflow-y: auto;
+  }
+  #setup.open { display: block; }
+  #setup h1 { font: 900 clamp(20px,4vh,34px) 'Arial Black', Arial; letter-spacing: 3px; display:flex; justify-content:space-between; align-items:center; margin-bottom: 2vh; }
+  #setup h1 small { font: 400 clamp(12px,2vh,16px) 'Courier New', monospace; opacity: .5; letter-spacing: 1px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 2vh 2vw; }
+  .card { background: #171a1f; border-radius: 14px; padding: 2vh 1.6vw; border-left: 6px solid #444; }
+  .card.ok { border-left-color: #2ecc71; } .card.warn { border-left-color: #f1c40f; } .card.bad { border-left-color: #e74c3c; }
+  .card h2 { font: 700 clamp(13px,2.2vh,18px) Arial; letter-spacing: 3px; opacity: .55; text-transform: uppercase; margin-bottom: 1vh; }
+  .card .big { font: 900 clamp(20px,4.2vh,36px) 'Arial Black', Arial; line-height: 1.1; word-break: break-word; }
+  .card .rows { margin-top: 1.2vh; font: clamp(13px,2.2vh,18px) 'Courier New', monospace; line-height: 1.6; opacity: .8; }
+  .btns { display: flex; flex-wrap: wrap; gap: 1vh; margin-top: 1.6vh; }
+  .sbtn {
+    flex: 1; min-width: 140px; min-height: 56px; border: none; border-radius: 10px;
+    background: #2a2f37; color: #fff; font: 700 clamp(14px,2.3vh,19px) Arial; letter-spacing: 1px; cursor: pointer;
+  }
+  .sbtn:active { background: #3b424d; }
+  .sbtn.primary { background: #2980b9; } .sbtn.danger { background: #8e2a20; }
+  .sbtn[disabled] { opacity: .4; }
+  .list { margin-top: 1.4vh; display: flex; flex-direction: column; gap: .8vh; }
+  .item {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    min-height: 56px; padding: 0 16px; border-radius: 10px; background: #22262d; cursor: pointer;
+    font: clamp(15px,2.5vh,20px) Arial;
+  }
+  .item:active { background: #333944; }
+  .item .meta { font: clamp(12px,2vh,16px) 'Courier New', monospace; opacity: .6; white-space: nowrap; }
+  .item.current { outline: 2px solid #2ecc71; }
+  .msg { margin-top: 1.2vh; font: clamp(13px,2.2vh,18px) 'Courier New', monospace; min-height: 1.4em; }
+  .msg.err { color: #ff7b6b; } .msg.good { color: #6be38f; }
+  .holdbtn { position: relative; overflow: hidden; }
+  .holdbtn .fill { position:absolute; left:0; top:0; bottom:0; width:0; background: rgba(255,255,255,.25); }
+
+  /* ── On-screen keyboard ───────────────────────────────────────────────── */
+  #kb-wrap { position: fixed; inset: 0; z-index: 110; background: rgba(0,0,0,.92); display: none; flex-direction: column; justify-content: flex-end; padding: 2vh 1vw; }
+  #kb-wrap.open { display: flex; }
+  #kb-title { font: 700 clamp(15px,2.6vh,22px) Arial; opacity: .7; margin-bottom: 1vh; text-align: center; }
+  #kb-input { font: clamp(20px,4vh,32px) 'Courier New', monospace; background: #1c2026; border-radius: 10px; padding: 1.2vh 16px; margin: 0 auto 1.6vh; width: min(900px, 96vw); min-height: 1.6em; word-break: break-all; }
+  #kb { display: flex; flex-direction: column; gap: .8vh; width: min(1100px, 98vw); margin: 0 auto; }
+  #kb .krow { display: flex; gap: .5vw; justify-content: center; }
+  #kb button { flex: 1; max-width: 9vw; min-height: clamp(44px, 8.5vh, 72px); border: none; border-radius: 8px; background: #2d323a; color: #fff; font: 700 clamp(16px,3vh,26px) Arial; }
+  #kb button:active { background: #4a525e; }
+  #kb button.wide { max-width: none; flex: 2.2; } #kb button.space { max-width: none; flex: 6; }
+  #kb button.go { background: #2980b9; } #kb button.on { background: #6c7686; }
 </style>
 </head>
 <body>
@@ -242,6 +306,52 @@
     <div id="drive-timer-reset">hold to reset</div>
   </div>
   <div id="ws-status">connecting…</div>
+  <div id="status-chip" title="Setup">
+    <span><span class="dot" id="chip-wifi"></span><span id="chip-wifi-t">Wi-Fi</span></span>
+    <span><span class="dot" id="chip-rb"></span>RaceBox</span>
+    <span><span class="dot" id="chip-pit"></span>Pit</span>
+  </div>
+</div>
+
+<div id="setup">
+  <h1>SETUP <small id="setup-host"></small>
+    <button class="sbtn" style="flex:0;min-width:150px" id="setup-close">CLOSE ✕</button></h1>
+  <div class="cards">
+    <div class="card" id="card-wifi">
+      <h2>Wi-Fi</h2>
+      <div class="big" id="wifi-ssid">—</div>
+      <div class="rows" id="wifi-rows"></div>
+      <div class="btns"><button class="sbtn primary" id="wifi-scan-btn">Change network</button></div>
+      <div class="msg" id="wifi-msg"></div>
+      <div class="list" id="wifi-list"></div>
+    </div>
+    <div class="card" id="card-rb">
+      <h2>RaceBox</h2>
+      <div class="big" id="rb-name">—</div>
+      <div class="rows" id="rb-rows"></div>
+      <div class="btns">
+        <button class="sbtn primary" id="rb-scan-btn">Find RaceBox</button>
+        <button class="sbtn" id="rb-auto-btn">Use any RaceBox</button>
+      </div>
+      <div class="msg" id="rb-msg"></div>
+      <div class="list" id="rb-list"></div>
+    </div>
+    <div class="card" id="card-pit">
+      <h2>Pit link</h2>
+      <div class="big" id="pit-state">—</div>
+      <div class="rows" id="pit-rows"></div>
+      <div class="btns">
+        <button class="sbtn holdbtn" id="desk-btn"><span class="fill"></span><span class="lbl">Hold: exit to desktop</span></button>
+        <button class="sbtn danger holdbtn" id="off-btn"><span class="fill"></span><span class="lbl">Hold: shut down</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="kb-wrap">
+  <div id="kb-title"></div>
+  <div id="kb-input"></div>
+  <div id="kb"></div>
 </div>
 
 <script>
@@ -423,12 +533,22 @@ function connect() {
   ws.onopen = () => {
     wsStatus.textContent = 'connected';
     clearTimeout(reconnectTimer);
+    sendCmd({ type: 'sys_status_req' });
   };
 
   ws.onmessage = (e) => {
     let msg;
     try { msg = JSON.parse(e.data); } catch { return; }
+    if (handleSetupMsg(msg)) return;
+    if (msg.type === 'reset_drive_timer') {          // from the pit dashboard
+      doReset();
+      const el = document.getElementById(screen.classList.contains('idle') ? 'idle-drive-time' : 'drive-timer');
+      el.style.opacity = '0.1';
+      setTimeout(() => el.style.opacity = '', 300);
+      return;
+    }
     if (msg.type === 'pit_message' && msg.code) {
+      if (msg.code !== 'STANDBY') closeSetup();   // a pit call always takes over the screen
       setState(msg.code);
     }
   };
@@ -440,6 +560,200 @@ function connect() {
 
   ws.onerror = () => ws.close();
 }
+
+
+// ── Setup screen ───────────────────────────────────────────────────────────
+const setupEl = document.getElementById('setup');
+const $ = id => document.getElementById(id);
+let setupPoll = null, setupIdle = null, lastStatus = null;
+
+function sendCmd(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
+function esc(t) { return String(t ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function openSetup() {
+  setupEl.classList.add('open');
+  sendCmd({ type: 'sys_status_req' });
+  clearInterval(setupPoll);
+  setupPoll = setInterval(() => sendCmd({ type: 'sys_status_req' }), 2000);
+  bumpSetupIdle();
+}
+function closeSetup() {
+  setupEl.classList.remove('open');
+  $('kb-wrap').classList.remove('open');
+  clearInterval(setupPoll); clearTimeout(setupIdle);
+  ['wifi-list','rb-list'].forEach(id => $(id).innerHTML = '');
+  ['wifi-msg','rb-msg'].forEach(id => setMsg(id, ''));
+}
+function bumpSetupIdle() {               // auto-close after 2 min untouched
+  clearTimeout(setupIdle);
+  setupIdle = setTimeout(closeSetup, 120000);
+}
+setupEl.addEventListener('pointerdown', bumpSetupIdle);
+$('kb-wrap').addEventListener('pointerdown', bumpSetupIdle);
+$('status-chip').addEventListener('click', e => { e.stopPropagation(); openSetup(); });
+$('setup-close').onclick = closeSetup;
+
+function setMsg(id, text, cls) { const el = $(id); el.textContent = text; el.className = 'msg' + (cls ? ' ' + cls : ''); }
+function setCard(id, cls) { $(id).className = 'card ' + cls; }
+function bars(sig) { return sig == null ? '' : sig >= 70 ? '▂▄▆█' : sig >= 50 ? '▂▄▆_' : sig >= 30 ? '▂▄__' : '▂___'; }
+
+function renderStatus(st) {
+  lastStatus = st;
+  const w = st.wifi || {}, rb = st.racebox || {}, sm = rb.sample, pit = st.relay || {};
+  // chip
+  $('chip-wifi').className = 'dot ' + (w.connected ? (w.signal != null && w.signal < 35 ? 'warn' : 'ok') : 'bad');
+  $('chip-wifi-t').textContent = w.connected ? w.ssid : 'No Wi-Fi';
+  const rbCls = rb.connected ? (sm && sm.fix_ok ? 'ok' : 'warn') : rb.state === 'scanning' ? 'warn' : 'bad';
+  $('chip-rb').className = 'dot ' + rbCls;
+  $('chip-pit').className = 'dot ' + (pit.connected ? 'ok' : 'bad');
+
+  $('setup-host').textContent = st.hostname ? `${st.hostname}${w.ip ? ' · ' + w.ip : ''}` : '';
+  // Wi-Fi card
+  setCard('card-wifi', w.connected ? 'ok' : 'bad');
+  $('wifi-ssid').textContent = w.connected ? w.ssid : 'Not connected';
+  $('wifi-rows').innerHTML = w.connected
+    ? `Signal ${bars(w.signal)} ${w.signal ?? '?'}%<br>IP ${esc(w.ip || '—')}`
+    : (w.error ? esc(w.error) : 'Tap “Change network” to join one');
+  // RaceBox card
+  setCard('card-rb', rbCls);
+  const stateTxt = { streaming: 'Connected', scanning: 'Searching…', disconnected: 'Lost — retrying',
+                     simulated: 'Simulator', off: 'Off' }[rb.state] || (rb.state || '—');
+  $('rb-name').textContent = rb.connected ? (rb.name || 'RaceBox') : stateTxt;
+  let rows = rb.connected ? `${stateTxt}<br>` : '';
+  if (sm) rows += `GPS ${sm.fix_ok ? 'FIX ✓' : 'no fix yet'} · ${sm.sats} sats` +
+                  (sm.fix_ok ? ` · ±${sm.h_acc_m.toFixed(1)} m` : '') +
+                  `<br>Battery ${sm.batt_pct}%${sm.charging ? ' (charging)' : ''} · ${sm.speed_kph.toFixed(0)} km/h<br>`;
+  rows += `Pairing: ${rb.chosen ? esc(rb.chosen) : 'any RaceBox'}`;
+  if (rb.mode === 'off') rows = 'RaceBox disabled (RACEBOX_MODE=off)';
+  $('rb-rows').innerHTML = rows;
+  $('rb-auto-btn').disabled = !rb.chosen;
+  // Pit card
+  setCard('card-pit', pit.connected ? 'ok' : 'bad');
+  $('pit-state').textContent = pit.connected ? 'Connected' : (w.connected ? 'No relay' : 'Offline');
+  $('pit-rows').innerHTML = `Relay ${pit.connected ? '✓' : '✗'}<br>Start/finish line ${st.laps ? 'set ✓' : 'not set'}`;
+}
+
+// Wi-Fi
+$('wifi-scan-btn').onclick = () => {
+  setMsg('wifi-msg', 'Scanning…'); $('wifi-list').innerHTML = '';
+  sendCmd({ type: 'wifi_scan' });
+};
+function renderWifiList(nets) {
+  setMsg('wifi-msg', nets.length ? 'Tap a network to join' : 'No networks found', nets.length ? '' : 'err');
+  $('wifi-list').innerHTML = '';
+  nets.forEach(n => {
+    const el = document.createElement('div');
+    el.className = 'item' + (n.active ? ' current' : '');
+    el.innerHTML = `<span>${esc(n.ssid)}</span><span class="meta">${n.active ? 'connected · ' : n.saved ? 'saved · ' : ''}${n.secure ? '🔒 ' : ''}${bars(n.signal)}</span>`;
+    el.onclick = () => {
+      if (n.active) return;
+      if (n.saved || !n.secure) return joinWifi(n.ssid, null);
+      openKeyboard(`Password for “${n.ssid}”`, pw => joinWifi(n.ssid, pw));
+    };
+    $('wifi-list').appendChild(el);
+  });
+}
+function joinWifi(ssid, password) {
+  setMsg('wifi-msg', `Connecting to ${ssid}…`);
+  $('wifi-list').innerHTML = '';
+  sendCmd({ type: 'wifi_connect', ssid, password });
+}
+
+// RaceBox
+$('rb-scan-btn').onclick = () => {
+  setMsg('rb-msg', 'Searching ~8 s… (close the RaceBox phone app)'); $('rb-list').innerHTML = '';
+  $('rb-scan-btn').disabled = true;
+  sendCmd({ type: 'racebox_scan' });
+};
+$('rb-auto-btn').onclick = () => { sendCmd({ type: 'racebox_select', address: null }); setMsg('rb-msg', 'Will use the first RaceBox found'); };
+function renderRbList(devs) {
+  $('rb-scan-btn').disabled = false;
+  const cur = lastStatus && lastStatus.racebox;
+  // a connected RaceBox stops advertising — keep it in the list
+  if (cur && cur.connected && cur.chosen && !devs.some(d => d.address === cur.chosen))
+    devs.unshift({ address: cur.chosen, name: cur.name || 'RaceBox', rssi: null, current: true });
+  setMsg('rb-msg', devs.length ? 'Tap your RaceBox to pair it' : 'No RaceBox found — is it on and the phone app closed?', devs.length ? '' : 'err');
+  $('rb-list').innerHTML = '';
+  devs.forEach(d => {
+    const el = document.createElement('div');
+    const isCur = d.current || (cur && cur.chosen === d.address);
+    el.className = 'item' + (isCur ? ' current' : '');
+    el.innerHTML = `<span>${esc(d.name)}</span><span class="meta">${esc(d.address)}${d.rssi != null ? ' · ' + d.rssi + ' dBm' : ' · connected'}</span>`;
+    el.onclick = () => {
+      sendCmd({ type: 'racebox_select', address: d.address });
+      setMsg('rb-msg', `Pairing ${d.name}…`, 'good');
+      $('rb-list').innerHTML = '';
+    };
+    $('rb-list').appendChild(el);
+  });
+}
+
+// Hold-to-confirm buttons
+function holdButton(el, ms, action) {
+  const fill = el.querySelector('.fill'); let t = null;
+  const reset = () => { clearTimeout(t); fill.style.transition = 'none'; fill.style.width = '0'; };
+  el.addEventListener('pointerdown', () => {
+    reset();
+    requestAnimationFrame(() => { fill.style.transition = `width ${ms}ms linear`; fill.style.width = '100%'; });
+    t = setTimeout(() => { reset(); action(); }, ms);
+  });
+  ['pointerup','pointerleave','pointercancel'].forEach(ev => el.addEventListener(ev, reset));
+}
+holdButton($('desk-btn'), 1500, () => sendCmd({ type: 'exit_kiosk' }));
+holdButton($('off-btn'), 3000, () => sendCmd({ type: 'shutdown' }));
+
+// On-screen keyboard
+const KB_LAYOUTS = {
+  lower: ['1234567890', 'qwertyuiop', 'asdfghjkl', 'zxcvbnm'],
+  upper: ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'],
+  sym:   ['1234567890', '!@#$%^&*()', '-_=+[]{};:', '\'",.<>/?\\|', '`~'],
+};
+let kbMode = 'lower', kbValue = '', kbShow = false, kbDone = null;
+function openKeyboard(title, done) {
+  kbValue = ''; kbMode = 'lower'; kbShow = false; kbDone = done;
+  $('kb-title').textContent = title;
+  $('kb-wrap').classList.add('open');
+  renderKb();
+}
+function renderKb() {
+  $('kb-input').textContent = kbShow ? kbValue : '•'.repeat(kbValue.length);
+  const kb = $('kb'); kb.innerHTML = '';
+  const row = keys => { const r = document.createElement('div'); r.className = 'krow'; keys.forEach(k => r.appendChild(k)); kb.appendChild(r); };
+  const key = (label, fn, cls) => { const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls;
+                                    b.addEventListener('pointerdown', e => { e.preventDefault(); fn(); renderKb(); }); return b; };
+  const ch = c => key(c, () => { kbValue += c; if (kbMode === 'upper') kbMode = 'lower'; });
+  KB_LAYOUTS[kbMode].forEach((line, i, all) => {
+    const keys = [...line].map(ch);
+    if (i === all.length - 1 && kbMode !== 'sym') keys.unshift(key('⇧', () => kbMode = kbMode === 'upper' ? 'lower' : 'upper', 'wide' + (kbMode === 'upper' ? ' on' : '')));
+    if (i === all.length - 1) keys.push(key('⌫', () => kbValue = kbValue.slice(0, -1), 'wide'));
+    row(keys);
+  });
+  row([
+    key('Cancel', () => $('kb-wrap').classList.remove('open'), 'wide'),
+    key(kbMode === 'sym' ? 'ABC' : '#+=', () => kbMode = kbMode === 'sym' ? 'lower' : 'sym', 'wide'),
+    key('space', () => kbValue += ' ', 'space'),
+    key(kbShow ? 'Hide' : 'Show', () => kbShow = !kbShow, 'wide'),
+    key('Join', () => { $('kb-wrap').classList.remove('open'); if (kbDone) kbDone(kbValue); }, 'wide go'),
+  ]);
+}
+
+function handleSetupMsg(msg) {
+  switch (msg.type) {
+    case 'sys_status':   renderStatus(msg); return true;
+    case 'wifi_list':    renderWifiList(msg.networks || []); return true;
+    case 'wifi_result':
+      setMsg('wifi-msg', msg.ok ? `Connected to ${msg.ssid}` : `Couldn't join ${msg.ssid}: ${msg.detail || 'failed'}`, msg.ok ? 'good' : 'err');
+      sendCmd({ type: 'sys_status_req' }); return true;
+    case 'racebox_list': renderRbList(msg.devices || []); return true;
+    case 'racebox_selected': sendCmd({ type: 'sys_status_req' }); return true;
+    case 'cmd_error':
+      setMsg(msg.cmd && msg.cmd.startsWith('wifi') ? 'wifi-msg' : 'rb-msg', `Error: ${msg.error}`, 'err');
+      $('rb-scan-btn').disabled = false; return true;
+  }
+  return false;
+}
+// keep the corner chip fresh even when setup is closed
+setInterval(() => { if (!setupEl.classList.contains('open')) sendCmd({ type: 'sys_status_req' }); }, 10000);
 
 // Initial state
 setState('STANDBY');

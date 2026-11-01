@@ -4,3 +4,5 @@ node_modules/
 .railway/
 pi/startline.json
 __pycache__/
+.pi-password
+pi/racebox.json
