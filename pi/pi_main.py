@@ -78,6 +78,8 @@ class State:
     relay_connected: bool = False
     racebox_t: asyncio.Task = None
     last_sample_t: float = 0.0
+    screen_off: bool = False        # pit-controlled dark mode
+    screen_peek: asyncio.TimerHandle = None
 
 state = State()
 
@@ -91,6 +93,7 @@ async def local_ws_handler(websocket):
     try:
         await websocket.send(json.dumps({"type": "hello", "build": COCKPIT_BUILD}))
         await websocket.send(json.dumps(state.current_msg))
+        await websocket.send(json.dumps(screen_msg()))
         async for raw in websocket:
             try:
                 msg = json.loads(raw)
@@ -128,6 +131,58 @@ async def send_cockpit(msg: dict) -> int:
         except Exception:
             state.local_clients.discard(ws)
     return sent
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dark mode (pit turns the cockpit screen off; pit calls / a tap wake it briefly)
+# ─────────────────────────────────────────────────────────────────────────────
+PEEK_SECONDS = 20
+
+
+def _backlight(on: bool):
+    """Official Pi touch displays expose a sysfs backlight; HDMI screens don't (cockpit goes black instead)."""
+    for bl in Path("/sys/class/backlight").glob("*/bl_power"):
+        try:
+            bl.write_text("0" if on else "4")
+        except OSError as e:
+            log.warning(f"backlight {bl}: {e}")
+
+
+def screen_msg():
+    lit = not state.screen_off or state.screen_peek is not None
+    return {"type": "screen", "off": not lit, "dark_mode": state.screen_off}
+
+
+async def apply_screen():
+    msg = screen_msg()
+    _backlight(not msg["off"])
+    await send_cockpit(msg)
+
+
+async def set_screen_off(off: bool):
+    state.screen_off = off
+    if state.screen_peek:
+        state.screen_peek.cancel()
+        state.screen_peek = None
+    log.info(f"Screen {'OFF (dark mode)' if off else 'ON'} — from pit")
+    await apply_screen()
+    publish({"type": "screen_state", "off": off})
+
+
+async def peek_screen():
+    """Light the screen for PEEK_SECONDS while dark mode is on."""
+    if not state.screen_off:
+        return
+    loop = asyncio.get_running_loop()
+    if state.screen_peek:
+        state.screen_peek.cancel()
+
+    def end_peek():
+        state.screen_peek = None
+        asyncio.ensure_future(apply_screen())
+
+    state.screen_peek = loop.call_later(PEEK_SECONDS, end_peek)
+    await apply_screen()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -254,6 +309,7 @@ async def relay_client():
                 await ws.send(json.dumps(state.racebox_status))
                 if state.laptimer:
                     await ws.send(json.dumps(state.laptimer.snapshot()))
+                await ws.send(json.dumps({"type": "screen_state", "off": state.screen_off}))
 
                 async def sender():
                     while True:
@@ -298,6 +354,10 @@ async def receive_loop(ws):
         if msg.get("type") == "pit_message":
             log.info(f"← relay: {msg.get('code')}")
             await broadcast_to_cockpit(msg)
+            if msg.get("code") != "STANDBY":
+                await peek_screen()          # a pit call always shows, even in dark mode
+        elif msg.get("type") == "set_screen":
+            await set_screen_off(not msg.get("on", True))
         elif msg.get("type") == "set_start_line":
             set_start_line_here()
         elif msg.get("type") == "clear_start_line":
@@ -530,6 +590,8 @@ async def handle_cockpit_cmd(ws, msg: dict):
         elif t == "racebox_select":
             await racebox_select(msg.get("address"))
             await reply({"type": "racebox_selected", "address": msg.get("address")})
+        elif t == "screen_peek":
+            await peek_screen()
         elif t == "exit_kiosk":
             await exit_kiosk()
         elif t == "shutdown":

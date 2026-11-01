@@ -188,6 +188,7 @@
                       padding: 10px 16px; font-size: 14px; font-weight: 700; cursor: pointer; }
   #car-tools button:active { opacity: .75; }
   #car-tools-note { font-size: 13px; color: #aaa; }
+  #car-tools button.dark-on { background: #4a3b8f; border-color: #7a68d8; }
 
   .btn-BOX_NOW   { background: #C0392B; }
   .btn-BOX_NEXT  { background: #E67E22; }
@@ -315,6 +316,7 @@
 </div>
 
 <div id="car-tools">
+  <button id="screen-toggle" title="Turn the driver's screen off / on">&#127769; Driver screen off</button>
   <button id="reset-drive-timer">&#9201; Reset cockpit drive timer</button>
   <span id="car-tools-note"></span>
 </div>
@@ -899,6 +901,19 @@ $('reset-drive-timer').onclick = () => {
   ws.send(JSON.stringify({ type: 'reset_drive_timer' }));
   carToolsNote('Sent — waiting for car…');
 };
+let screenOff = false;
+function renderScreenBtn() {
+  const b = $('screen-toggle');
+  b.innerHTML = screenOff ? '&#9728;&#65039; Driver screen ON' : '&#127769; Driver screen off';
+  b.classList.toggle('dark-on', screenOff);
+  b.title = screenOff ? 'Screen is OFF — pit calls still light it for 20 s. Click to turn it back on.'
+                      : "Turn the driver's screen off (pit calls still light it for 20 s)";
+}
+$('screen-toggle').onclick = () => {
+  if (!(ws && ws.readyState === 1)) return carToolsNote('Not connected to relay');
+  ws.send(JSON.stringify({ type: 'set_screen', on: screenOff }));
+  carToolsNote(screenOff ? 'Turning driver screen on…' : 'Turning driver screen off…');
+};
 let carToolsTimer = null;
 function carToolsNote(t) {
   $('car-tools-note').textContent = t;
@@ -1031,6 +1046,9 @@ function connect() {
     } else if (msg.type === 'racebox_status') {
       RB.status = msg;
       $('racebox').classList.add('show');
+    } else if (msg.type === 'screen_state') {
+      screenOff = !!msg.off; renderScreenBtn();
+      carToolsNote(screenOff ? 'Driver screen is OFF' : 'Driver screen is ON');
     } else if (msg.type === 'drive_timer_reset') {
       carToolsNote(msg.ok ? 'Drive timer reset ✓' : `Not reset: ${msg.reason}`);
       addPitLog && addPitLog(msg.ok ? 'Drive timer reset' : 'Drive timer reset failed');

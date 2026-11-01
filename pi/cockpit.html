@@ -219,6 +219,12 @@
   #screen.dark-text #ws-status,
   #screen.dark-text #team-name { color: #111111; }
 
+  /* ── Dark mode: pit turned the screen off ─────────────────────────────── */
+  #darkout { position: fixed; inset: 0; z-index: 200; background: #000; display: none; cursor: none; }
+  #darkout.on { display: block; }
+  #darkout .hint { position: absolute; bottom: 12px; width: 100%; text-align: center;
+                   font: 12px 'Courier New', monospace; letter-spacing: 3px; color: #1a1a1a; }
+
   /* ── Status chip (opens setup) ─────────────────────────────────────────── */
   #status-chip {
     position: absolute; top: 8px; right: 10px; z-index: 50;
@@ -347,6 +353,8 @@
     </div>
   </div>
 </div>
+
+<div id="darkout"><div class="hint">SCREEN OFF · TAP TO PEEK</div></div>
 
 <div id="kb-wrap">
   <div id="kb-title"></div>
@@ -542,6 +550,11 @@ function connect() {
     if (msg.type === 'hello') {                      // new code deployed on the Pi → reload page
       if (window.__build && window.__build !== msg.build) location.reload();
       window.__build = msg.build;
+      return;
+    }
+    if (msg.type === 'screen') {                     // dark mode from the pit
+      document.getElementById('darkout').classList.toggle('on', !!msg.off);
+      if (msg.off) closeSetup();
       return;
     }
     if (handleSetupMsg(msg)) return;
@@ -759,6 +772,9 @@ function handleSetupMsg(msg) {
 }
 // keep the corner chip fresh even when setup is closed
 setInterval(() => { if (!setupEl.classList.contains('open')) sendCmd({ type: 'sys_status_req' }); }, 10000);
+
+// Tap the black screen to light it up for a few seconds
+document.getElementById('darkout').addEventListener('pointerdown', () => sendCmd({ type: 'screen_peek' }));
 
 // Initial state
 setState('STANDBY');

@@ -8,9 +8,9 @@ const clients = new Set();
 let currentDriver = null;
 
 // RaceBox: car → pit message types, and last-known state replayed to newly connected pit tabs
-const CAR_TO_PIT = new Set(['telemetry', 'lap', 'lap_state', 'racebox_status', 'line_result', 'drive_timer_reset']);
-const PIT_TO_CAR = new Set(['set_start_line', 'clear_start_line', 'reset_laps', 'reset_drive_timer']);
-const cached = { lap_state: null, racebox_status: null };
+const CAR_TO_PIT = new Set(['telemetry', 'lap', 'lap_state', 'racebox_status', 'line_result', 'drive_timer_reset', 'screen_state']);
+const PIT_TO_CAR = new Set(['set_start_line', 'clear_start_line', 'reset_laps', 'reset_drive_timer', 'set_screen']);
+const cached = { lap_state: null, racebox_status: null, screen_state: null };
 
 function broadcast(data, excludeSocket) {
   const msg = JSON.stringify(data);
@@ -123,6 +123,7 @@ wss.on('connection', (ws, req) => {
     console.log(`[-] ${role || 'unknown'} disconnected (${clients.size} total)`);
     if (role === 'car') {
       cached.racebox_status = null;
+      cached.screen_state = null;
       sendTo('pit', { type: 'car_status', online: false });
     }
   });
