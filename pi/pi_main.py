@@ -358,7 +358,7 @@ def set_start_line_here():
         publish({"type": "line_result", "ok": False, "reason": "No GPS fix"})
     elif s["speed_kph"] < MIN_SPEED_FOR_LINE_KPH:
         publish({"type": "line_result", "ok": False,
-                 "reason": f"Car must be moving (>{MIN_SPEED_FOR_LINE_KPH} km/h) to set direction"})
+                 "reason": f"Car must be moving (>{MIN_SPEED_FOR_LINE_KPH * 0.621371:.0f} mph) to set direction"})
     else:
         set_line(line_from_point(s["lat"], s["lon"], s["heading"]))
         publish({"type": "line_result", "ok": True, "reason": ""})

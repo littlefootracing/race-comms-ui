@@ -627,7 +627,7 @@ function renderStatus(st) {
   let rows = rb.connected ? `${stateTxt}<br>` : '';
   if (sm) rows += `GPS ${sm.fix_ok ? 'FIX ✓' : 'no fix yet'} · ${sm.sats} sats` +
                   (sm.fix_ok ? ` · ±${sm.h_acc_m.toFixed(1)} m` : '') +
-                  `<br>Battery ${sm.batt_pct}%${sm.charging ? ' (charging)' : ''} · ${sm.speed_kph.toFixed(0)} km/h<br>`;
+                  `<br>Battery ${sm.batt_pct}%${sm.charging ? ' (charging)' : ''} · ${(sm.speed_kph * 0.621371).toFixed(0)} mph<br>`;
   rows += `Pairing: ${rb.chosen ? esc(rb.chosen) : 'any RaceBox'}`;
   if (rb.mode === 'off') rows = 'RaceBox disabled (RACEBOX_MODE=off)';
   $('rb-rows').innerHTML = rows;

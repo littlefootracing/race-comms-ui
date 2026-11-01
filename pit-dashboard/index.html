@@ -329,7 +329,7 @@
   <div class="rb-grid">
     <div class="rb-card" id="rb-speed-card">
       <div class="lbl">Speed</div>
-      <div class="rb-big"><span id="rb-speed">–</span><small>km/h</small></div>
+      <div class="rb-big"><span id="rb-speed">–</span><small>mph</small></div>
       <div class="rb-row"><span class="lbl">Heading</span><span id="rb-heading">–</span></div>
     </div>
     <div class="rb-card" id="rb-lap-card">
@@ -962,7 +962,7 @@ function rbRender() {
   const t = RB.tele, stale = !t || Date.now() - RB.teleAt > TELE_STALE_MS;
   ['rb-speed-card', 'rb-lap-card'].forEach((id) => $(id).classList.toggle('stale', stale));
 
-  $('rb-speed').textContent = t && !stale ? Math.round(t.speed_kph) : '–';
+  $('rb-speed').textContent = t && !stale ? Math.round(t.speed_kph * 0.621371) : '–';
   $('rb-heading').textContent = t && !stale ? `${t.heading}°` : '–';
   $('rb-g').textContent = t && !stale ? `${Math.hypot(t.gx, t.gy).toFixed(2)} g` : '';
 
