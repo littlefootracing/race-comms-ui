@@ -539,6 +539,11 @@ function connect() {
   ws.onmessage = (e) => {
     let msg;
     try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.type === 'hello') {                      // new code deployed on the Pi → reload page
+      if (window.__build && window.__build !== msg.build) location.reload();
+      window.__build = msg.build;
+      return;
+    }
     if (handleSetupMsg(msg)) return;
     if (msg.type === 'reset_drive_timer') {          // from the pit dashboard
       doReset();

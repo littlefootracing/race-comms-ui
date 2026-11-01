@@ -51,7 +51,10 @@ RACEBOX_MODE   = os.environ.get("RACEBOX_MODE", "ble")   # ble | sim | off
 TELEMETRY_HZ   = 5                                        # relay rate; lap timing uses full 25 Hz
 START_LINE_FILE = PI_DIR / "startline.json"
 RACEBOX_FILE    = PI_DIR / "racebox.json"                # RaceBox picked on the setup screen
-MIN_SPEED_FOR_LINE_KPH = 20                               # heading is only trustworthy when moving
+MIN_SPEED_FOR_LINE_KPH = 20
+# Changes whenever cockpit.html is redeployed; the open kiosk page reloads itself when it sees a new value
+_ck = PI_DIR / "cockpit.html"
+COCKPIT_BUILD = f"{int(_ck.stat().st_mtime)}-{_ck.stat().st_size}" if _ck.exists() else "dev"                               # heading is only trustworthy when moving
 
 logging.basicConfig(
     level=logging.INFO,
@@ -86,6 +89,7 @@ async def local_ws_handler(websocket):
     state.local_clients.add(websocket)
     log.info("cockpit connected")
     try:
+        await websocket.send(json.dumps({"type": "hello", "build": COCKPIT_BUILD}))
         await websocket.send(json.dumps(state.current_msg))
         async for raw in websocket:
             try:
@@ -135,6 +139,10 @@ class SilentHandler(SimpleHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         pass
+
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-store")   # always serve the freshly deployed page
+        super().end_headers()
 
 
 def start_http_server():
